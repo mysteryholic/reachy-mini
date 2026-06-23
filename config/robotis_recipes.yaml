@@ -195,6 +195,29 @@
           "required": true
         }
       ]
+    },
+    "custom_omx_recipe": {
+      "display_name": "Custom OMX Recipe",
+      "device": "omx",
+      "description": "Run a custom multi-terminal robot CLI workflow.",
+      "triggers": [
+        "start OMX",
+        "start omx bring up"
+      ],
+      "terminals": [
+        {
+          "terminal_id": "omx_bringup_f",
+          "display_name": "OMX-F Bringup",
+          "connection_id": "omx_pc",
+          "command_type": "container",
+          "command": "ros2 launch open_manipulator_bringup omx_f.launch.py",
+          "run_mode": "detached",
+          "start_order": 1,
+          "wait_after_start_sec": 0.0,
+          "stop_command": "pkill -TERM -f 'omx_f.launch.py|open_manipulator_bringup' || true",
+          "required": true
+        }
+      ]
     }
   }
 }
