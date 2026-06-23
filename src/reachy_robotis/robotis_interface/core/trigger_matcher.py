@@ -16,8 +16,10 @@ import difflib
 from dataclasses import dataclass
 
 
-# Minimum confidence required to trigger an action from free text.
-MATCH_THRESHOLD = 0.6
+# Minimum confidence required to trigger an action from free text. Kept low
+# enough to catch loosely-phrased requests ("do the omx moveit") while the model
+# only calls the resolver when the user actually asks to control a robot.
+MATCH_THRESHOLD = 0.5
 
 # Filler words that must not, on their own, count as a phrase match.
 _STOPWORDS = frozenset(
@@ -104,9 +106,13 @@ def _phrase_score(
     content = [token for token in phrase_tokens if token not in _STOPWORDS] or phrase_tokens
     coverage = sum(1 for token in content if token in text_token_set) / len(content)
     ratio = difflib.SequenceMatcher(None, phrase, text).ratio()
-    if len(phrase_tokens) >= 2 and len(content) >= 2 and coverage >= 0.6:
-        return min(0.84, 0.45 + 0.35 * coverage + 0.1 * ratio)
-    if ratio >= 0.8:
+    if len(phrase_tokens) >= 2 and len(content) >= 2 and coverage >= 0.5:
+        return min(0.86, 0.45 + 0.4 * coverage + 0.1 * ratio)
+    # A single distinctive content word present (e.g. "moveit", "bringup") is a
+    # decent signal on its own.
+    if len(content) == 1 and content[0] in text_token_set and len(content[0]) >= 4:
+        return 0.6
+    if ratio >= 0.75:
         return min(0.7, ratio)
     return 0.0
 

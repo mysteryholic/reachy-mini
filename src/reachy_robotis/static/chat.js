@@ -10,10 +10,32 @@
   const sendBtn = document.getElementById("chat-send-btn");
   const status = document.getElementById("chat-status");
   const conn = document.getElementById("chat-conn");
+  const modeBtn = document.getElementById("chat-mode-btn");
+  const modeHint = document.getElementById("chat-mode-hint");
   if (!log || !input || !sendBtn) return;
 
   let since = 0;
+  let mode = "hybrid"; // "hybrid" (voice + text) or "only_chatting" (voice muted)
   const seen = new Set();
+
+  function renderMode() {
+    if (modeBtn) modeBtn.textContent = mode === "only_chatting" ? "Chatting only (voice off)" : "Hybrid (voice + text)";
+    if (modeHint) modeHint.textContent = mode === "only_chatting" ? "microphone muted — type to talk" : "speak or type";
+  }
+
+  async function setMode(next) {
+    mode = next;
+    renderMode();
+    try {
+      await fetch("/chat/input_mode", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode }),
+      });
+    } catch (e) {
+      /* best-effort; poll will reconcile */
+    }
+  }
 
   function bubble(role, text) {
     const row = document.createElement("div");
@@ -41,6 +63,10 @@
       if (res.ok) {
         const data = await res.json();
         setConn(!!data.connected);
+        if (data.input_mode && data.input_mode !== mode) {
+          mode = data.input_mode;
+          renderMode();
+        }
         for (const m of data.messages || []) {
           if (seen.has(m.id)) continue;
           seen.add(m.id);
@@ -80,6 +106,12 @@
       send();
     }
   });
+  if (modeBtn) {
+    modeBtn.addEventListener("click", () => {
+      setMode(mode === "only_chatting" ? "hybrid" : "only_chatting");
+    });
+  }
 
+  renderMode();
   poll();
 })();
