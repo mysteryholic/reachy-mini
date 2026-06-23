@@ -1,0 +1,702 @@
+:root {
+  color-scheme: light;
+  --bg: #f5f7fb;
+  --panel: #ffffff;
+  --panel-soft: #f9fbff;
+  --text: #172033;
+  --muted: #667085;
+  --line: #d8e0ec;
+  --accent: #1261a6;
+  --accent-soft: #e9f2fb;
+  --danger: #b42318;
+  --ok: #067647;
+  --warn: #b54708;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: var(--text);
+  background: var(--bg);
+}
+
+.compact-shell {
+  width: min(1180px, calc(100vw - 20px));
+  padding: 12px 0 28px;
+}
+
+/* Combined selector beats the single-class `.shell` rule so the console panel
+   actually gets the wider width — gives the 10-column recipe table room. */
+.shell.compact-shell {
+  width: min(1680px, calc(100vw - 24px));
+}
+
+.compact-header,
+.console-section {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 10px;
+}
+
+.compact-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.compact-header h1 {
+  font-size: 22px;
+}
+
+.console-section h2 {
+  margin-bottom: 10px;
+  font-size: 16px;
+}
+
+.compact-form,
+.compact-recipe,
+.run-bar {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 8px;
+  align-items: end;
+}
+
+.compact-recipe {
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+}
+
+.compact-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 8px 0;
+}
+
+.compact-list button {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  text-align: left;
+}
+
+.shell {
+  width: min(1320px, calc(100vw - 32px));
+  margin: 0 auto;
+  padding: 24px 0 48px;
+}
+
+.hero,
+section {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 18px;
+  margin-bottom: 16px;
+}
+
+.hero {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  align-items: flex-start;
+}
+
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+  padding: 10px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.tab {
+  color: var(--accent);
+  background: white;
+}
+
+.tab.active {
+  color: white;
+  background: var(--accent);
+}
+
+.tab-panel {
+  display: none;
+}
+
+.tab-panel.active {
+  display: block;
+}
+
+.tab-panel.dashboard.active,
+.tab-panel.two-col.active {
+  display: grid;
+}
+
+.hero-actions,
+.row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+h1,
+h2,
+h3,
+p {
+  margin: 0;
+}
+
+h1 {
+  font-size: 30px;
+  line-height: 1.15;
+}
+
+h2 {
+  margin-bottom: 12px;
+  font-size: 19px;
+}
+
+h3 {
+  margin-bottom: 8px;
+  font-size: 16px;
+}
+
+.subtitle {
+  max-width: 880px;
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1.45;
+}
+
+.eyebrow {
+  margin-bottom: 4px;
+  color: var(--muted);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.section-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: baseline;
+  margin-bottom: 10px;
+}
+
+.dashboard {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.8fr);
+  gap: 18px;
+}
+
+.pipeline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.pipeline span {
+  position: relative;
+  flex: 1 1 150px;
+  min-height: 52px;
+  display: grid;
+  place-items: center;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel-soft);
+  text-align: center;
+  font-weight: 650;
+}
+
+.summary-grid,
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 10px;
+}
+
+.metric,
+.device-card,
+.cli-card,
+.demo-grid article {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+  background: var(--panel-soft);
+}
+
+.metric span {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.metric b {
+  overflow-wrap: anywhere;
+}
+
+.metric.wide {
+  grid-column: 1 / -1;
+}
+
+.card-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: flex-start;
+  margin-bottom: 10px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  min-height: 24px;
+  padding: 2px 8px;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border: 1px solid #cfe2f5;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.chip.ok {
+  color: var(--ok);
+  background: #ecfdf3;
+  border-color: #abefc6;
+}
+
+.chip.warn {
+  color: var(--warn);
+  background: #fffaeb;
+  border-color: #fedf89;
+}
+
+dl {
+  display: grid;
+  grid-template-columns: 118px minmax(0, 1fr);
+  gap: 6px 10px;
+  margin: 0;
+}
+
+dt {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-size: 13px;
+}
+
+.flow {
+  margin-top: 10px;
+  padding: 8px;
+  background: white;
+  border: 1px dashed var(--line);
+  border-radius: 6px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.mini-log {
+  min-height: 72px;
+  margin-top: 10px;
+  font-size: 12px;
+}
+
+.two-col {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 18px;
+}
+
+.stack {
+  display: grid;
+  gap: 10px;
+}
+
+.builder-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(320px, 0.75fr);
+  gap: 18px;
+}
+
+label {
+  display: grid;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+button,
+input,
+select {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font: inherit;
+}
+
+button {
+  padding: 9px 12px;
+  color: white;
+  background: var(--accent);
+  border-color: var(--accent);
+  cursor: pointer;
+}
+
+.button-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 38px;
+  padding: 9px 12px;
+  color: white;
+  background: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  text-decoration: none;
+  font: inherit;
+}
+
+button.secondary {
+  color: var(--accent);
+  background: white;
+}
+
+.button-link.secondary {
+  color: var(--accent);
+  background: white;
+}
+
+button.danger {
+  background: var(--danger);
+  border-color: var(--danger);
+}
+
+button.tiny {
+  padding: 5px 7px;
+  font-size: 12px;
+}
+
+input,
+select {
+  width: 100%;
+  padding: 9px;
+  background: white;
+}
+
+pre {
+  min-height: 96px;
+  max-height: 340px;
+  overflow: auto;
+  padding: 10px;
+  background: #101828;
+  color: #e6edf7;
+  border-radius: 8px;
+  white-space: pre-wrap;
+}
+
+.conversation-layout {
+  display: grid;
+  grid-template-columns: minmax(280px, 0.9fr) minmax(320px, 1.1fr);
+  gap: 12px;
+}
+
+.conversation-log {
+  min-height: 180px;
+  max-height: 320px;
+  overflow: auto;
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel-soft);
+}
+
+.conversation-entry {
+  display: grid;
+  grid-template-columns: 76px 64px minmax(0, 1fr);
+  gap: 8px;
+  padding: 7px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: white;
+  font-size: 13px;
+}
+
+.conversation-entry time,
+.conversation-entry b {
+  color: var(--muted);
+}
+
+.table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  background: white;
+}
+
+th,
+td {
+  padding: 9px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+  font-size: 13px;
+}
+
+th {
+  color: var(--muted);
+  background: #f3f6fa;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+td input,
+td select {
+  min-width: 84px;
+  padding: 6px;
+}
+
+/* Command / Stop columns hold long CLI strings — give their textareas room
+   so they stay readable in the widened panel. */
+td textarea {
+  width: 100%;
+  min-width: 260px;
+  padding: 6px;
+  font: inherit;
+  resize: vertical;
+}
+
+/* The recipe editor is a CSS grid (auto-fit minmax(210px,1fr)). Without this,
+   the terminal table, recipe list, and button row get trapped in a single
+   ~210px grid cell — make them span the full width of the form. */
+.compact-recipe > .row,
+.compact-recipe > #recipe-list,
+.compact-recipe > #recipe-terminal-table {
+  grid-column: 1 / -1;
+}
+
+/* Recipe terminal editor (Order/Terminal/Connection/Type/Command/Mode/Wait/
+   Stop/Required) — 10 cramped columns. Give the table a comfortable minimum
+   width (the .table-wrap scrolls horizontally when needed), shrink the tiny
+   columns, and let the text-heavy ones breathe. */
+#recipe-terminal-table table {
+  min-width: 1500px;
+  table-layout: fixed;
+}
+
+#recipe-terminal-table td,
+#recipe-terminal-table th {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+/* Order (1), Wait (7), Required (9), Delete (10): keep narrow. */
+#recipe-terminal-table th:nth-child(1),
+#recipe-terminal-table td:nth-child(1) { width: 64px; }
+#recipe-terminal-table th:nth-child(7),
+#recipe-terminal-table td:nth-child(7) { width: 70px; }
+#recipe-terminal-table th:nth-child(9),
+#recipe-terminal-table td:nth-child(9) { width: 72px; text-align: center; }
+#recipe-terminal-table th:nth-child(10),
+#recipe-terminal-table td:nth-child(10) { width: 84px; }
+
+#recipe-terminal-table td:nth-child(1) input,
+#recipe-terminal-table td:nth-child(7) input { min-width: 0; }
+
+/* Terminal (2) / Connection (3) / Type (4) / Mode (6): moderate. */
+#recipe-terminal-table th:nth-child(2),
+#recipe-terminal-table td:nth-child(2) { width: 200px; }
+#recipe-terminal-table th:nth-child(3),
+#recipe-terminal-table td:nth-child(3) { width: 150px; }
+#recipe-terminal-table th:nth-child(4),
+#recipe-terminal-table td:nth-child(4),
+#recipe-terminal-table th:nth-child(6),
+#recipe-terminal-table td:nth-child(6) { width: 120px; }
+
+/* Command (5) / Stop (8): the long CLI strings — take the remaining space. */
+#recipe-terminal-table th:nth-child(5),
+#recipe-terminal-table td:nth-child(5) { width: 360px; }
+#recipe-terminal-table th:nth-child(8),
+#recipe-terminal-table td:nth-child(8) { width: 300px; }
+
+.row-actions {
+  min-width: 170px;
+}
+
+.status-panel {
+  margin: 12px 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel-soft);
+}
+
+.cli-grid,
+.demo-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.command-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.command-list div {
+  display: grid;
+  grid-template-columns: minmax(100px, 1fr) minmax(120px, 1fr) auto auto auto;
+  gap: 8px;
+  align-items: center;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: white;
+}
+
+code {
+  overflow-wrap: anywhere;
+}
+
+.timeline {
+  display: grid;
+  gap: 8px;
+  max-height: 430px;
+  overflow: auto;
+}
+
+.timeline div {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  gap: 10px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel-soft);
+}
+
+.timeline time {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.architecture {
+  display: grid;
+  gap: 8px;
+  text-align: center;
+}
+
+.architecture > div {
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel-soft);
+  font-weight: 700;
+}
+
+.adapter-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.adapter-grid span {
+  display: block;
+  padding: 10px;
+  border-radius: 6px;
+  background: white;
+}
+
+.adapter-grid small {
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.demo-grid article {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px 10px;
+  align-items: center;
+}
+
+.demo-grid p {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.demo-grid button {
+  grid-row: 1 / span 2;
+  grid-column: 2;
+}
+
+@media (max-width: 980px) {
+  .hero,
+  .dashboard,
+  .two-col,
+  .builder-layout,
+  .conversation-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .hero {
+    display: grid;
+  }
+
+  .adapter-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .command-list div {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 620px) {
+  .shell {
+    width: min(100vw - 20px, 1320px);
+  }
+
+  .adapter-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .pipeline {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+}

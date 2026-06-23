@@ -1,0 +1,92 @@
+{
+  "connections": {
+    "ai_worker_jetson": {
+      "display_name": "AI Worker Jetson Orin 32GB",
+      "target": "jetson_orin_32gb",
+      "transport": "ssh_docker",
+      "host": "192.168.50.57",
+      "fallback_hosts": [
+        "ffw-SNPR48A0000.local"
+      ],
+      "port": 22,
+      "user": "robotis",
+      "auth": {
+        "method": "ssh_key",
+        "key_path": "~/.ssh/id_ed25519",
+        "password_env": "AI_WORKER_SSH_PASSWORD"
+      },
+      "connect_timeout_sec": 5,
+      "command_timeout_sec": 30,
+      "working_dir": "~/ai_worker",
+      "container": {
+        "mode": "helper_script",
+        "helper_script": "./docker/container.sh",
+        "name": "ai_worker_ros2",
+        "exec_shell": "bash -lc"
+      },
+      "ros": {
+        "distro": "jazzy",
+        "setup": [
+          "source /opt/ros/jazzy/setup.bash",
+          "source /root/ros2_ws/install/setup.bash"
+        ]
+      }
+    },
+    "omy_raspberry_pi": {
+      "display_name": "OMY Raspberry Pi",
+      "target": "raspberry_pi",
+      "transport": "ssh_docker",
+      "host": "192.168.50.56",
+      "fallback_hosts": [],
+      "port": 22,
+      "user": "pollen",
+      "auth": {
+        "method": "ssh_key",
+        "key_path": "~/.ssh/id_ed25519"
+      },
+      "connect_timeout_sec": 5,
+      "command_timeout_sec": 30,
+      "working_dir": "~/omy",
+      "container": {
+        "mode": "docker_exec",
+        "name": "omy_ros2",
+        "exec_shell": "bash -lc"
+      },
+      "ros": {
+        "distro": "humble",
+        "setup": [
+          "source /opt/ros/humble/setup.bash",
+          "source /home/pollen/ros2_ws/install/setup.bash"
+        ]
+      }
+    },
+    "omx_pc": {
+      "display_name": "OMX Control PC",
+      "target": "omx",
+      "transport": "ssh_docker",
+      "host": "192.168.60.74",
+      "fallback_hosts": [],
+      "port": 22,
+      "user": "robotis",
+      "auth": {
+        "method": "ssh_key",
+        "key_path": "",
+        "password_env": "OMX_SSH_PASSWORD"
+      },
+      "working_dir": "~/open_manipulator",
+      "container": {
+        "mode": "docker_exec",
+        "name": "open_manipulator",
+        "exec_shell": "bash -lc"
+      },
+      "ros": {
+        "distro": "jazzy",
+        "setup": [
+          "source /opt/ros/jazzy/setup.bash",
+          "source /root/ros2_ws/install/setup.bash"
+        ],
+        "env": {}
+      }
+    }
+  }
+}
