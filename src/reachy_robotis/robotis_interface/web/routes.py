@@ -348,6 +348,7 @@ source /root/ros2_ws/install/setup.bash</textarea></label>
           <label>Description<input name="description" value="Run a custom multi-terminal robot CLI workflow." /></label>
           <label>Triggers<textarea name="triggers" rows="2">start custom OMX recipe</textarea></label>
           <div class="row">
+            <button id="new-recipe" type="button" class="secondary">New Recipe</button>
             <button id="add-recipe-terminal" type="button" class="secondary">Add Terminal</button>
             <button id="save-recipe" type="button">Save Recipe</button>
             <button id="run-edited-recipe" type="button">Run Edited</button>

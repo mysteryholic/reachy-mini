@@ -495,6 +495,31 @@ document.addEventListener("click", async (event) => {
       const recipe = (state.summary.recipes || []).find((item) => item.recipe_id === target.dataset.loadRecipe);
       if (recipe) loadRecipe(recipe);
     }
+    if (target.id === "new-recipe") {
+      loadRecipe({
+        recipe_id: "",
+        display_name: "",
+        device: "omx",
+        description: "",
+        triggers: [],
+        terminals: [
+          {
+            terminal_id: "terminal_1",
+            display_name: "Terminal 1",
+            connection_id: "omx_pc",
+            command_type: "container",
+            command: "",
+            run_mode: "detached",
+            start_order: 1,
+            wait_after_start_sec: 0,
+            stop_command: "",
+            required: true,
+          },
+        ],
+      });
+      const idInput = $("#recipe-editor")?.querySelector('[name="recipe_id"]');
+      if (idInput) idInput.focus();
+    }
     if (target.id === "add-recipe-terminal") {
       const index = state.recipeTerminals.length + 1;
       const connectionEditor = $("#connection-editor");
@@ -518,7 +543,11 @@ document.addEventListener("click", async (event) => {
     }
     if (target.id === "save-recipe") {
       const recipe = recipePayload();
-      const data = await api(`/recipes/${recipe.recipe_id}`, { method: "POST", body: JSON.stringify({ recipe }) });
+      if (!recipe.recipe_id || !String(recipe.recipe_id).trim()) {
+        showJson("#result", { ok: false, error: "recipe_id_required", message: "Enter a Recipe ID before saving a new recipe." });
+        return;
+      }
+      const data = await api(`/recipes/${encodeURIComponent(recipe.recipe_id)}`, { method: "POST", body: JSON.stringify({ recipe }) });
       showJson("#result", data);
       await refresh();
     }

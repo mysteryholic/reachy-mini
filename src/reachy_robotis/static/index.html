@@ -46,6 +46,23 @@
         </div>
       </div>
 
+      <div class="panel" id="chat-panel">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Conversation</p>
+            <h2>Chat with Reachy Mini</h2>
+          </div>
+          <span id="chat-conn" class="chip">connecting…</span>
+        </div>
+        <p class="muted">Type below or just speak to the robot. Reachy replies, and when you say something close to a registered trigger (e.g. “start OMX MoveIt”, “bring up OMX”), it runs it.</p>
+        <div id="chat-log" style="min-height:160px;max-height:340px;overflow-y:auto;display:flex;flex-direction:column;gap:8px;padding:12px;border:1px solid rgba(120,120,140,.25);border-radius:10px;background:rgba(0,0,0,.15);margin:10px 0;"></div>
+        <div style="display:flex;gap:8px;">
+          <input id="chat-input" placeholder="Type a message… e.g. start OMX MoveIt" autocomplete="off" style="flex:1;padding:10px;border-radius:8px;border:1px solid rgba(120,120,140,.35);background:transparent;color:inherit;" />
+          <button id="chat-send-btn" type="button">Send</button>
+        </div>
+        <div id="chat-status" class="muted" style="margin-top:8px;min-height:1.2em;"></div>
+      </div>
+
       <div class="panel usage-panel">
         <div class="panel-heading">
           <div>
@@ -100,5 +117,6 @@
     </div>
 
     <script src="/static/main.js"></script>
+    <script src="/static/chat.js"></script>
   </body>
 </html>

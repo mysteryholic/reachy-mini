@@ -63,6 +63,12 @@ def _compute_response_cost(usage: Any) -> float:
 class OpenaiRealtimeHandler(AsyncStreamHandler):
     """An OpenAI realtime handler for fastrtc Stream."""
 
+    # The handler instance with a live realtime connection. The settings-page
+    # chat routes (POST /chat, GET /chat/messages) schedule work onto it so the
+    # typed text goes through the same brain + tools as voice.
+    _active_instance: "OpenaiRealtimeHandler | None" = None
+    _chat_only_default: bool = False
+
     def __init__(self, deps: ToolDependencies, gradio_mode: bool = False, instance_path: Optional[str] = None):
         """Initialize the handler."""
         super().__init__(
@@ -115,6 +121,170 @@ class OpenaiRealtimeHandler(AsyncStreamHandler):
         self._response_done_event: asyncio.Event = asyncio.Event()
         self._response_done_event.set()
         self._last_response_rejected: bool = False
+
+        # Typed-chat support (settings-page chat panel). Readable transcript ring
+        # buffer + mic-mute state so typing does not fight the live microphone.
+        import threading as _threading
+        from collections import deque as _deque
+
+        self._loop: asyncio.AbstractEventLoop | None = None
+        self._transcript: "deque[dict[str, Any]]" = _deque(maxlen=200)
+        self._transcript_seq: int = 0
+        self._transcript_lock = _threading.Lock()
+        self._text_chat_active: bool = False
+        self._text_chat_focus_active: bool = False
+        self._chat_only_mode: bool = type(self)._chat_only_default
+        self._audio_input_muted_until: float = 0.0
+
+    # ---- typed chat (settings-page chat panel) ----
+    def _record_message(self, role: str, content: str) -> None:
+        """Append a user/assistant text turn to the readable transcript buffer."""
+        if not isinstance(content, str) or not content.strip():
+            return
+        with self._transcript_lock:
+            self._transcript_seq += 1
+            self._transcript.append({"id": self._transcript_seq, "role": role, "content": content})
+
+    def get_messages(self, since: int = 0) -> dict[str, Any]:
+        """Return transcript entries newer than ``since`` (and the latest id)."""
+        with self._transcript_lock:
+            messages = [dict(m) for m in self._transcript if m["id"] > since]
+            latest = self._transcript_seq
+        return {"messages": messages, "latest": latest}
+
+    @classmethod
+    def active_messages(cls, since: int = 0) -> dict[str, Any]:
+        """Transcript accessor for the active handler (settings page polling)."""
+        handler = cls._active_instance
+        if handler is None:
+            mode = "only_chatting" if cls._chat_only_default else "hybrid"
+            return {
+                "messages": [],
+                "latest": since,
+                "connected": False,
+                "audio_muted": cls._chat_only_default,
+                "chat_only_mode": cls._chat_only_default,
+                "input_mode": mode,
+            }
+        data = handler.get_messages(since)
+        data["connected"] = handler.connection is not None
+        data["audio_muted"] = handler._audio_input_muted()
+        data["chat_only_mode"] = handler._chat_only_mode
+        data["input_mode"] = "only_chatting" if handler._chat_only_mode else "hybrid"
+        return data
+
+    def _audio_input_muted(self) -> bool:
+        import time as _time
+
+        return (
+            self._chat_only_mode
+            or self._text_chat_active
+            or self._text_chat_focus_active
+            or _time.monotonic() < self._audio_input_muted_until
+        )
+
+    def _set_text_chat_audio_mute(self, active: bool, hold_s: float = 0.0) -> None:
+        import time as _time
+
+        self._text_chat_active = active
+        until = _time.monotonic() + hold_s
+        if active:
+            self._audio_input_muted_until = max(self._audio_input_muted_until, until)
+        else:
+            self._audio_input_muted_until = until
+
+    async def _start_text_chat_audio_mute(self) -> None:
+        self._set_text_chat_audio_mute(True, hold_s=30.0)
+        if not self.connection:
+            return
+        try:
+            await self.connection.input_audio_buffer.clear()
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("Could not clear input audio buffer for typed chat mute: %s", exc)
+
+    async def set_text_chat_audio_mute(self, enabled: bool, hold_s: float = 0.0) -> bool:
+        import time as _time
+
+        if enabled:
+            self._text_chat_focus_active = True
+            self._audio_input_muted_until = max(self._audio_input_muted_until, _time.monotonic() + 30.0)
+            if self.connection:
+                try:
+                    await self.connection.input_audio_buffer.clear()
+                except Exception as exc:  # noqa: BLE001
+                    logger.debug("Could not clear input audio buffer for chat focus mute: %s", exc)
+        else:
+            self._text_chat_focus_active = False
+            self._audio_input_muted_until = _time.monotonic() + hold_s
+        return True
+
+    async def set_chat_only_mode(self, enabled: bool) -> bool:
+        self._chat_only_mode = bool(enabled)
+        OpenaiRealtimeHandler._chat_only_default = self._chat_only_mode
+        if self._chat_only_mode and self.connection:
+            try:
+                await self.connection.input_audio_buffer.clear()
+            except Exception as exc:  # noqa: BLE001
+                logger.debug("Could not clear input audio buffer for chat-only mode: %s", exc)
+        return True
+
+    async def send_text_message(self, text: str, image_b64: str | None = None) -> bool:
+        """Inject a typed user message into the live realtime conversation.
+
+        The typed text goes through the same realtime brain and tool set as
+        voice. Returns True if submitted to an active connection.
+        """
+        text = (text or "").strip()
+        if not text:
+            return False
+        if not self.connection:
+            logger.warning("send_text_message: no active realtime connection")
+            return False
+        try:
+            await self._start_text_chat_audio_mute()
+            self._record_message("user", text)
+            await self.output_queue.put(AdditionalOutputs({"role": "user", "content": text}))
+            content: list[dict[str, Any]] = [{"type": "input_text", "text": text}]
+            if image_b64:
+                content.append({"type": "input_image", "image_url": f"data:image/jpeg;base64,{image_b64}"})
+            await self.connection.conversation.item.create(
+                item={"type": "message", "role": "user", "content": content},
+            )
+            await self._safe_response_create()
+            return True
+        except Exception as e:  # noqa: BLE001 - never crash the caller
+            logger.warning("send_text_message failed: %s", e)
+            self._set_text_chat_audio_mute(False)
+            return False
+
+    @classmethod
+    def schedule_text_message(cls, text: str, timeout: float = 10.0, image_b64: str | None = None) -> bool:
+        """Thread-safe entry point for the settings chat route to send typed text."""
+        handler = cls._active_instance
+        loop = getattr(handler, "_loop", None) if handler is not None else None
+        if handler is None or loop is None:
+            logger.warning("schedule_text_message: no active realtime handler")
+            return False
+        try:
+            fut = asyncio.run_coroutine_threadsafe(handler.send_text_message(text, image_b64=image_b64), loop)
+            return bool(fut.result(timeout=timeout))
+        except Exception as e:  # noqa: BLE001
+            logger.warning("schedule_text_message failed: %s", e)
+            return False
+
+    @classmethod
+    def schedule_chat_only_mode(cls, enabled: bool, timeout: float = 3.0) -> bool:
+        cls._chat_only_default = bool(enabled)
+        handler = cls._active_instance
+        loop = getattr(handler, "_loop", None) if handler is not None else None
+        if handler is None or loop is None:
+            return True
+        try:
+            fut = asyncio.run_coroutine_threadsafe(handler.set_chat_only_mode(enabled), loop)
+            return bool(fut.result(timeout=timeout))
+        except Exception as e:  # noqa: BLE001
+            logger.warning("schedule_chat_only_mode failed: %s", e)
+            return False
 
     def copy(self) -> "OpenaiRealtimeHandler":
         """Create a copy of the handler."""
@@ -520,6 +690,10 @@ class OpenaiRealtimeHandler(AsyncStreamHandler):
 
             # Manage event received from the openai server
             self.connection = conn
+            # Register as the active handler for the settings-page typed chat and
+            # remember this loop so cross-thread chat routes can schedule onto it.
+            type(self)._active_instance = self
+            self._loop = asyncio.get_event_loop()
             try:
                 self._connected_event.set()
             except Exception:
@@ -609,11 +783,14 @@ class OpenaiRealtimeHandler(AsyncStreamHandler):
                             except asyncio.CancelledError:
                                 pass
 
+                        self._record_message("user", event.transcript)
                         await self.output_queue.put(AdditionalOutputs({"role": "user", "content": event.transcript}))
 
                     # Handle assistant transcription
                     if event.type in ("response.audio_transcript.done", "response.output_audio_transcript.done"):
                         logger.debug(f"Assistant transcript: {event.transcript}")
+                        self._record_message("assistant", event.transcript)
+                        self._set_text_chat_audio_mute(False)
                         await self.output_queue.put(AdditionalOutputs({"role": "assistant", "content": event.transcript}))
 
                     # Handle audio delta
@@ -718,6 +895,10 @@ class OpenaiRealtimeHandler(AsyncStreamHandler):
 
         """
         if not self.connection:
+            return
+        # Drop mic audio while the operator is typing (or chat-only mode) so the
+        # typed turn is not mixed with stray microphone input.
+        if self._audio_input_muted():
             return
 
         input_sample_rate, audio_frame = frame

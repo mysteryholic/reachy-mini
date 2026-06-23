@@ -304,6 +304,41 @@ class LocalStream:
                 logger.warning(f"API key validation failed: {e}")
                 return JSONResponse({"valid": False, "error": "validation_error"}, status_code=500)
 
+        # ---- typed chat (chat panel on the settings page) ----
+        # Deliver the typed text to the live conversation so the same brain
+        # (+ tools, incl. registered actions/recipes) responds as it does to voice.
+        class ChatTextPayload(BaseModel):
+            text: str
+
+        class ChatModePayload(BaseModel):
+            mode: str = "hybrid"
+
+        @self._settings_app.post("/chat/send")
+        def _chat_send(payload: ChatTextPayload) -> JSONResponse:
+            text = (payload.text or "").strip()
+            if not text:
+                return JSONResponse({"ok": False, "error": "empty text"}, status_code=400)
+            ok = OpenaiRealtimeHandler.schedule_text_message(text)
+            return JSONResponse({"ok": bool(ok)})
+
+        # The chat panel lives at "/". Browsing to "/chat" (old habit from the
+        # Gradio UI) used to 405 against the POST endpoint, so redirect it home.
+        @self._settings_app.get("/chat")
+        def _chat_redirect():  # type: ignore[no-untyped-def]
+            from starlette.responses import RedirectResponse
+
+            return RedirectResponse(url="/")
+
+        @self._settings_app.get("/chat/messages")
+        def _chat_messages(since: int = 0) -> JSONResponse:
+            return JSONResponse(OpenaiRealtimeHandler.active_messages(int(since)))
+
+        @self._settings_app.post("/chat/input_mode")
+        def _chat_input_mode(payload: ChatModePayload) -> JSONResponse:
+            only_chatting = str(payload.mode).strip().lower() == "only_chatting"
+            ok = OpenaiRealtimeHandler.schedule_chat_only_mode(only_chatting)
+            return JSONResponse({"ok": bool(ok), "mode": "only_chatting" if only_chatting else "hybrid"})
+
         self._settings_initialized = True
 
     def launch(self) -> None:

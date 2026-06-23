@@ -4,6 +4,7 @@ import os
 import asyncio
 from typing import Any
 from time import strftime
+from dataclasses import replace
 
 from reachy_robotis.robotis_interface.adapters.base import RobotAdapter
 from reachy_robotis.robotis_interface.core.schemas import ActionResult
@@ -93,13 +94,40 @@ class ActionExecutor:
         return resolved
 
     async def run_resolved_text(self, text: str) -> ActionResult:
+        """Resolve a spoken/typed phrase to a trigger and run it in one shot.
+
+        Mirrors the reachy_manipulation reference feel: the conversation passes
+        the raw utterance, the matcher picks the best trigger, it runs, and a
+        friendly ``reply`` (plus the matched trigger) comes back for the model.
+        """
         resolved = self.resolve(text)
         if not resolved.get("ok") or resolved.get("kind") is None or resolved.get("name") is None:
-            result = ActionResult(ok=False, error=str(resolved.get("error") or "no_match"), message=str(resolved.get("message") or ""))
+            message = f"No registered action matched the phrase '{text}'."
+            result = ActionResult(
+                ok=False,
+                error=str(resolved.get("error") or "no_match"),
+                message=message,
+                data={"reply": message, "matched_text": text},
+            )
             self._ui_state["last_execution_result"] = result.message or result.error
             self._ui_state["last_execution_ok"] = False
             return result
-        return await self.run_action(str(resolved["kind"]), str(resolved["name"]))
+        kind = str(resolved["kind"])
+        name = str(resolved["name"])
+        matched_trigger = str(resolved.get("matched_trigger") or "")
+        result = await self.run_action(kind, name)
+        reply = result.message or (f"Running '{name}'." if result.ok else f"Could not run '{name}'.")
+        return replace(
+            result,
+            data={
+                **(result.data or {}),
+                "reply": reply,
+                "matched_text": text,
+                "matched_trigger": matched_trigger,
+                "resolved_kind": kind,
+                "resolved_name": name,
+            },
+        )
 
     async def run_action(self, kind: str, name: str) -> ActionResult:
         self._timeline(f"Run requested: {kind}:{name}")
@@ -264,20 +292,47 @@ class ActionExecutor:
         """Return the last generic CLI command outcome for a device (for /logs)."""
         return dict(self._last_command.get(device, {}))
 
+    def _stop_targets(self, device: str | None) -> list[str]:
+        """Pick which devices a stop should touch.
+
+        An explicit ``device`` always targets exactly that device. A global stop
+        (``device is None``) only touches devices that are online or currently
+        busy, so an idle/offline remote robot (e.g. an unplugged OMY) is never
+        reached with a pkill SSH and unrelated machines are left alone.
+        """
+        if device is not None:
+            return [device] if device in self.adapters else []
+        statuses = self.status_store.snapshot()
+        busy_sessions: set[str] = set()
+        if self.terminal_session_manager is not None:
+            for session in self.terminal_session_manager.sessions_snapshot():
+                if str(session.get("state")) in {"pending", "starting", "running", "unknown"}:
+                    busy_sessions.add(str(session.get("device")))
+        targets: list[str] = []
+        for dev in self.adapters:
+            status = statuses.get(dev, {})
+            if status.get("online") or status.get("active_action") or dev in busy_sessions:
+                targets.append(dev)
+        return targets
+
     async def stop(self, device: str | None = None) -> ActionResult:
         async with self._stop_lock:
+            target_devices = self._stop_targets(device)
             recipe_results = []
             if self.recipe_catalog is not None and self.terminal_session_manager is not None:
                 for recipe in self.recipe_catalog.list_recipes():
-                    if device is None or recipe.device == device:
+                    if recipe.device in target_devices:
                         recipe_results.append(await self.terminal_session_manager.stop_recipe(recipe.recipe_id))
-            targets = [self.adapters[device]] if device and device in self.adapters else list(self.adapters.values())
-            results = [await adapter.stop() for adapter in targets]
+            results = [await self.adapters[dev].stop() for dev in target_devices]
             ok = all(result.ok for result in results) and all(result.get("ok") for result in recipe_results)
             result = ActionResult(
                 ok=ok,
                 message="Soft Stop complete" if ok else "Some devices failed to stop",
-                data={"recipe_results": recipe_results, "results": [result.to_mapping() for result in results]},
+                data={
+                    "stopped_devices": target_devices,
+                    "recipe_results": recipe_results,
+                    "results": [result.to_mapping() for result in results],
+                },
             )
             self._record_result(result)
             return result

@@ -40,7 +40,7 @@
           "command": "ros2 launch open_manipulator_bringup omx_f.launch.py",
           "run_mode": "detached",
           "start_order": 1,
-          "wait_after_start_sec": 0.0,
+          "wait_after_start_sec": 1.0,
           "stop_command": "pkill -TERM -f 'omx_f.launch.py|open_manipulator_bringup' || true",
           "required": true
         },

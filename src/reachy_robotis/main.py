@@ -164,9 +164,9 @@ def run(
     if is_simulation and not args.gradio:
         logger.info("Simulation mode detected. Automatically enabling gradio flag.")
         args.gradio = True
-    elif not args.gradio and app_stop_event is None and settings_app is None:
-        logger.info("Standalone run detected. Enabling Robot Action Interface GUI.")
-        args.gradio = True
+    # A standalone run uses LocalStream (robot mic/speaker conversation) and
+    # self-hosts the web UI — chat panel at "/", control panel at "/robotis" —
+    # mirroring the reference app. Pass --gradio to use the browser /chat audio UI.
 
     camera_worker, _, vision_manager = handle_vision_stuff(args, robot)
 
@@ -199,6 +199,8 @@ def run(
     handler = OpenaiRealtimeHandler(deps, gradio_mode=args.gradio, instance_path=instance_path)
 
     stream_manager: gr.Blocks | LocalStream | None = None
+    # True when we self-host the LocalStream web UI for a standalone run.
+    standalone_web = False
 
     if args.gradio:
         api_key_textbox = gr.Textbox(
@@ -247,9 +249,13 @@ def run(
 
         app = gr.mount_gradio_app(app, stream.ui, path="/chat")
     else:
-        if settings_app is not None:
-            mount_robotis_routes(settings_app)
-        # In headless mode, wire settings_app + instance_path to console LocalStream
+        # LocalStream conversation (robot mic/speaker). Serve the web UI on a
+        # FastAPI app: chat panel at "/", control panel at "/robotis". The Reachy
+        # Mini daemon supplies that app; for a standalone run we host one ourselves.
+        if settings_app is None:
+            settings_app = FastAPI()
+            standalone_web = True
+        mount_robotis_routes(settings_app)
         stream_manager = LocalStream(
             handler,
             robot,
@@ -298,6 +304,23 @@ def run(
             )
             uvicorn.run(app, host=server_name, port=server_port)
         else:
+            # Standalone non-gradio: serve the self-hosted web UI (chat at "/",
+            # robot action interface at "/robotis") in a background thread, then
+            # run the conversation loops (blocking, robot mic/speaker).
+            if standalone_web:
+                import uvicorn
+
+                server_name = os.getenv("GRADIO_SERVER_NAME", "0.0.0.0")
+                server_port = int(os.getenv("GRADIO_SERVER_PORT", "7860"))
+                logger.info(
+                    "Serving app on http://%s:%d (chat at /, robot action interface at /robotis)",
+                    server_name,
+                    server_port,
+                )
+                _web_server = uvicorn.Server(
+                    uvicorn.Config(settings_app, host=server_name, port=server_port, log_level="info")
+                )
+                threading.Thread(target=_web_server.run, name="reachy-robotis-web", daemon=True).start()
             stream_manager.launch()
     except KeyboardInterrupt:
         logger.info("Keyboard interruption in main thread... closing server.")

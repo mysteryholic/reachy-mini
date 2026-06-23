@@ -10,7 +10,13 @@ class RunRobotisAction(Tool):
     """Run a registered ROBOTIS action by name."""
 
     name = "run_robotis_action"
-    description = "Run a registered ROBOTIS action, saved recipe, task, or command by catalog name. Also accepts a user phrase to resolve a trigger. Never accepts shell commands."
+    description = (
+        "Run an OMX/OMY/AI Worker action on the robot. Use this whenever the user asks to "
+        "do something that matches a saved trigger phrase (e.g. 'start OMX MoveIt', "
+        "'bring up OMX', 'play the OMX demo', 'start OMY MoveIt'). Pass the user's exact "
+        "utterance as 'name' and the best-matching trigger is resolved and executed in one "
+        "step; a friendly 'reply' plus the matched trigger comes back. Never accepts shell commands."
+    )
     parameters_schema = {
         "type": "object",
         "properties": {
