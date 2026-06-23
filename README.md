@@ -201,3 +201,4 @@ Press `Ctrl+C` again to force shutdown. The app should gracefully close connecti
 ## See Also
 
 The original README from the conversation app is in [README_OLD.md](README_OLD.md).
+# reachy-mini
