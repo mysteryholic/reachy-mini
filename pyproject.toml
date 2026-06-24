@@ -4,11 +4,11 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "reachy_robotis"
-version = "0.3.0"
+version = "0.3.1"
 description = ""
 readme = "README.md"
 requires-python = ">=3.10"
-dependencies = [ "aiortc>=1.13.0", "fastapi>=0.115.0", "fastrtc>=0.0.34", "gradio==5.50.1.dev1", "huggingface-hub==1.3.0", "opencv-python>=4.12.0.88", "python-dotenv", "PyYAML>=6.0.2", "openai>=2.1", "reachy_mini_dances_library", "reachy_mini_toolbox", "reachy-mini>=1.5.0", "eclipse-zenoh~=1.7.0", "gradio_client>=1.13.3",]
+dependencies = [ "aiortc>=1.13.0", "fastapi>=0.115.0", "fastrtc>=0.0.34", "gradio==5.50.1.dev1", "huggingface-hub==1.3.0", "opencv-python>=4.12.0.88", "python-dotenv", "PyYAML>=6.0.2", "openai>=2.1", "reachy_mini_dances_library", "reachy_mini_toolbox", "reachy-mini>=1.5.0", "gradio_client>=1.13.3",]
 [[project.authors]]
 name = "Pollen Robotics"
 email = "contact@pollen-robotics.com"
