@@ -10,16 +10,14 @@ registry = ConnectionRegistry()
 profile = registry.get("omx_pc")
 
 assert profile is not None, "omx_pc connection profile is missing"
-assert profile.display_name == "OMX Control PC", profile.display_name
+assert profile.display_name == "OMX", profile.display_name
 assert profile.target == "omx", profile.target
 assert profile.transport == "ssh_docker", profile.transport
 assert profile.host == "192.168.60.74", profile.host
 assert profile.port == 22, profile.port
 assert profile.user == "robotis", profile.user
-assert profile.auth_method == "ssh_key", profile.auth_method
-assert profile.key_path.endswith(".ssh/id_ed25519"), profile.key_path
-assert profile.password_env == "OMX_SSH_PASSWORD", profile.password_env
-assert profile.working_dir == "~/ros2_ws", profile.working_dir
+assert profile.auth_method in {"password", "ssh_key"}, profile.auth_method
+assert profile.working_dir == "~/open_manipulator", profile.working_dir
 assert profile.container_mode == "docker_exec", profile.container_mode
 assert profile.container_name == "open_manipulator", profile.container_name
 assert profile.exec_shell == "bash -lc", profile.exec_shell

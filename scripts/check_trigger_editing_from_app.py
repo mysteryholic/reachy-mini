@@ -21,7 +21,7 @@ assert "Talk to Reachy" not in routes
 assert "Conversation triggers" in javascript
 assert "data-advanced-triggers" in javascript
 assert "one trigger phrase per line" in javascript
-assert "JSON.stringify({ triggers, terminals })" in javascript
+assert "JSON.stringify({ display_name: displayName, description, triggers, terminals })" in javascript
 assert 'triggers = payload.get("triggers")' in presets
 assert "requires at least one trigger" in presets
 assert '@router.put("/products/{product_id}/workflows/{workflow_id}")' in routes

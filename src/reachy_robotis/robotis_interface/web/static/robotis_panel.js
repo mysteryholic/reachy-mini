@@ -70,27 +70,68 @@ function advancedWorkflow(product) {
   return `
     <details class="advanced-block">
       <summary>Advanced</summary>
-      <div class="advanced-content">
-        <p class="muted">Add one trigger phrase per line. Reachy runs this workflow when conversation text matches one of these phrases.</p>
+      <div class="advanced-content" data-advanced-editor data-new-workflow="false">
+        <p class="muted">Edit this workflow, or create a custom workflow by reusing saved terminals and adding custom CLI terminals. Add one trigger phrase per line.</p>
+        <div class="advanced-workflow-fields">
+          <label>Workflow ID<input data-workflow-field="workflow_id" value="${escapeHtml(recipe?.recipe_id || "")}" readonly /></label>
+          <label>Workflow name<input data-workflow-field="display_name" value="${escapeHtml(recipe?.display_name || "")}" /></label>
+          <label class="full-width">Description<input data-workflow-field="description" value="${escapeHtml(recipe?.description || "")}" /></label>
+        </div>
         <label>Conversation triggers
           <textarea data-advanced-triggers rows="4">${escapeHtml((recipe?.triggers || []).join("\n"))}</textarea>
         </label>
+        <div class="terminal-toolbar">
+          <button type="button" class="secondary" data-product-action="new-workflow">New Custom Workflow</button>
+          <label>Reuse terminal
+            <select data-terminal-library>${renderTerminalLibrary(product.product_id)}</select>
+          </label>
+          <button type="button" class="secondary" data-product-action="add-existing-terminal">Add Existing Terminal</button>
+          <button type="button" class="secondary" data-product-action="add-custom-terminal">Add Custom Terminal</button>
+        </div>
         <div data-advanced-terminals>
           ${renderAdvancedTerminals(recipe)}
         </div>
-        <button type="button" class="secondary" data-product-action="save-advanced">Save Advanced Workflow</button>
+        <button type="button" data-product-action="save-advanced">Save Workflow</button>
       </div>
     </details>`;
 }
 
+function productRecipes(productId) {
+  return (state.summary.recipes || []).filter((recipe) => recipe.device === productId);
+}
+
+function renderTerminalLibrary(productId) {
+  return productRecipes(productId).flatMap((recipe) =>
+    (recipe.terminals || []).map((terminal, index) => `
+      <option value="${escapeHtml(`${recipe.recipe_id}::${index}`)}">
+        ${escapeHtml(recipe.display_name)} — ${escapeHtml(terminal.display_name || terminal.terminal_id)}
+      </option>`),
+  ).join("");
+}
+
 function renderAdvancedTerminals(recipe) {
   if (!recipe) return `<p class="muted">Select a workflow.</p>`;
-  return (recipe.terminals || []).map((terminal, index) => `
+  return (recipe.terminals || []).map((terminal, index) => renderTerminalEditor(terminal, index)).join("");
+}
+
+function renderTerminalEditor(terminal, index) {
+  return `
     <div class="advanced-terminal" data-terminal-index="${index}">
-      <strong>${escapeHtml(terminal.display_name || terminal.terminal_id)}</strong>
+      <div class="advanced-terminal-head">
+        <strong>Terminal ${index + 1}</strong>
+        <button type="button" class="danger tiny" data-product-action="delete-terminal">Delete</button>
+      </div>
+      <div class="advanced-terminal-fields">
+        <label>Terminal ID<input data-field="terminal_id" value="${escapeHtml(terminal.terminal_id || `terminal_${index + 1}`)}" /></label>
+        <label>Name<input data-field="display_name" value="${escapeHtml(terminal.display_name || "")}" /></label>
+        <label>Type<select data-field="command_type"><option value="container" ${terminal.command_type !== "host" ? "selected" : ""}>Container</option><option value="host" ${terminal.command_type === "host" ? "selected" : ""}>Host</option></select></label>
+        <label>Run mode<select data-field="run_mode"><option value="detached" ${terminal.run_mode !== "foreground" ? "selected" : ""}>Detached</option><option value="foreground" ${terminal.run_mode === "foreground" ? "selected" : ""}>Foreground</option></select></label>
+        <label>Start order<input data-field="start_order" type="number" min="1" value="${escapeHtml(terminal.start_order ?? index + 1)}" /></label>
+        <label>Wait after start (seconds)<input data-field="wait_after_start_sec" type="number" min="0" step="0.1" value="${escapeHtml(terminal.wait_after_start_sec ?? 0)}" /></label>
+      </div>
       <label>Command<textarea data-field="command" rows="2">${escapeHtml(terminal.command)}</textarea></label>
       <label>Stop command<textarea data-field="stop_command" rows="2">${escapeHtml(terminal.stop_command || "")}</textarea></label>
-    </div>`).join("");
+    </div>`;
 }
 
 function renderProductCards() {
@@ -200,29 +241,125 @@ async function stopProduct(productId) {
 
 async function saveAdvancedWorkflow(productId) {
   const card = cardFor(productId);
-  const workflowId = selectedWorkflow(productId);
-  const recipe = recipeById(workflowId);
-  if (!recipe) throw new Error("Select a workflow.");
-  const editors = [...card.querySelectorAll("[data-terminal-index]")];
-  const terminals = (recipe.terminals || []).map((terminal, index) => {
-    const editor = editors[index];
+  const editor = card.querySelector("[data-advanced-editor]");
+  const workflowId = editor.querySelector('[data-workflow-field="workflow_id"]').value.trim();
+  const displayName = editor.querySelector('[data-workflow-field="display_name"]').value.trim();
+  const description = editor.querySelector('[data-workflow-field="description"]').value.trim();
+  if (!workflowId) throw new Error("Enter a Workflow ID.");
+  if (!displayName) throw new Error("Enter a Workflow name.");
+  const terminals = [...editor.querySelectorAll("[data-terminal-index]")].map((terminalEditor, index) => {
+    const value = (field) => terminalEditor.querySelector(`[data-field="${field}"]`).value.trim();
     return {
-      ...terminal,
-      command: editor.querySelector('[data-field="command"]').value.trim(),
-      stop_command: editor.querySelector('[data-field="stop_command"]').value.trim(),
+      terminal_id: value("terminal_id"),
+      display_name: value("display_name"),
+      connection_id: productById(productId).connection_id,
+      command_type: value("command_type"),
+      command: value("command"),
+      run_mode: value("run_mode"),
+      start_order: Number(value("start_order") || index + 1),
+      wait_after_start_sec: Number(value("wait_after_start_sec") || 0),
+      stop_command: value("stop_command"),
+      required: true,
     };
   });
-  const triggers = card.querySelector("[data-advanced-triggers]").value
+  if (!terminals.length) throw new Error("Add at least one terminal.");
+  const triggers = editor.querySelector("[data-advanced-triggers]").value
     .split(/\r?\n/)
     .map((item) => item.trim())
     .filter(Boolean);
   if (!triggers.length) throw new Error("Enter at least one conversation trigger.");
+  const creating = editor.dataset.newWorkflow === "true";
   await api(`/products/${encodeURIComponent(productId)}/workflows/${encodeURIComponent(workflowId)}`, {
-    method: "PUT",
-    body: JSON.stringify({ triggers, terminals }),
+    method: creating ? "POST" : "PUT",
+    body: JSON.stringify({ display_name: displayName, description, triggers, terminals }),
   });
-  setText(card.querySelector("[data-card-result]"), "Advanced workflow saved.");
+  setText(card.querySelector("[data-card-result]"), creating ? "Custom workflow created." : "Workflow saved.");
   await refresh();
+  const refreshedCard = cardFor(productId);
+  refreshedCard.querySelector('[name="workflow"]').value = workflowId;
+  updateSelectedWorkflow(refreshedCard);
+}
+
+function resetTerminalIndexes(card) {
+  [...card.querySelectorAll("[data-terminal-index]")].forEach((terminal, index) => {
+    terminal.dataset.terminalIndex = String(index);
+    setText(terminal.querySelector(".advanced-terminal-head strong"), `Terminal ${index + 1}`);
+    const order = terminal.querySelector('[data-field="start_order"]');
+    if (order) order.value = String(index + 1);
+  });
+}
+
+function uniqueTerminalId(card, baseId) {
+  const existing = new Set(
+    [...card.querySelectorAll('[data-field="terminal_id"]')].map((input) => input.value.trim()),
+  );
+  let candidate = baseId || "terminal";
+  let suffix = 2;
+  while (existing.has(candidate)) {
+    candidate = `${baseId || "terminal"}_${suffix}`;
+    suffix += 1;
+  }
+  return candidate;
+}
+
+function addExistingTerminal(productId) {
+  const card = cardFor(productId);
+  const selector = card.querySelector("[data-terminal-library]");
+  const [recipeId, rawIndex] = selector.value.split("::");
+  const source = recipeById(recipeId)?.terminals?.[Number(rawIndex)];
+  if (!source) throw new Error("Select an existing terminal.");
+  const terminals = card.querySelector("[data-advanced-terminals]");
+  if (terminals.querySelector(".muted")) terminals.innerHTML = "";
+  const index = terminals.querySelectorAll("[data-terminal-index]").length;
+  terminals.insertAdjacentHTML(
+    "beforeend",
+    renderTerminalEditor(
+      {
+        ...source,
+        terminal_id: uniqueTerminalId(card, source.terminal_id),
+        start_order: index + 1,
+      },
+      index,
+    ),
+  );
+}
+
+function addCustomTerminal(productId) {
+  const card = cardFor(productId);
+  const terminals = card.querySelector("[data-advanced-terminals]");
+  if (terminals.querySelector(".muted")) terminals.innerHTML = "";
+  const index = terminals.querySelectorAll("[data-terminal-index]").length;
+  terminals.insertAdjacentHTML(
+    "beforeend",
+    renderTerminalEditor(
+      {
+        terminal_id: uniqueTerminalId(card, "custom_terminal"),
+        display_name: "Custom Terminal",
+        command_type: "container",
+        command: "",
+        run_mode: "detached",
+        start_order: index + 1,
+        wait_after_start_sec: 0,
+        stop_command: "",
+      },
+      index,
+    ),
+  );
+}
+
+function startNewWorkflow(productId) {
+  const card = cardFor(productId);
+  const editor = card.querySelector("[data-advanced-editor]");
+  editor.dataset.newWorkflow = "true";
+  const id = editor.querySelector('[data-workflow-field="workflow_id"]');
+  id.readOnly = false;
+  id.value = `${productId}_custom_workflow`;
+  editor.querySelector('[data-workflow-field="display_name"]').value = "Custom Workflow";
+  editor.querySelector('[data-workflow-field="description"]').value = "";
+  editor.querySelector("[data-advanced-triggers]").value = `start ${productId.toUpperCase()} custom workflow`;
+  editor.querySelector("[data-advanced-terminals]").innerHTML = "";
+  addCustomTerminal(productId);
+  id.focus();
 }
 
 function updateSelectedWorkflow(card) {
@@ -232,8 +369,15 @@ function updateSelectedWorkflow(card) {
   const workflow = product.workflows.find((item) => item.workflow_id === workflowId);
   setText(card.querySelector(".workflow-description"), workflow?.description || "");
   const recipe = recipeById(workflowId);
-  card.querySelector("[data-advanced-triggers]").value = (recipe?.triggers || []).join("\n");
-  card.querySelector("[data-advanced-terminals]").innerHTML = renderAdvancedTerminals(recipe);
+  const editor = card.querySelector("[data-advanced-editor]");
+  editor.dataset.newWorkflow = "false";
+  const id = editor.querySelector('[data-workflow-field="workflow_id"]');
+  id.value = recipe?.recipe_id || "";
+  id.readOnly = true;
+  editor.querySelector('[data-workflow-field="display_name"]').value = recipe?.display_name || "";
+  editor.querySelector('[data-workflow-field="description"]').value = recipe?.description || "";
+  editor.querySelector("[data-advanced-triggers]").value = (recipe?.triggers || []).join("\n");
+  editor.querySelector("[data-advanced-terminals]").innerHTML = renderAdvancedTerminals(recipe);
 }
 
 function resultSessions(payload) {
@@ -281,6 +425,13 @@ document.addEventListener("click", async (event) => {
       if (action === "run") await runProduct(productId);
       if (action === "stop") await stopProduct(productId);
       if (action === "save-advanced") await saveAdvancedWorkflow(productId);
+      if (action === "new-workflow") startNewWorkflow(productId);
+      if (action === "add-existing-terminal") addExistingTerminal(productId);
+      if (action === "add-custom-terminal") addCustomTerminal(productId);
+      if (action === "delete-terminal") {
+        target.closest("[data-terminal-index]")?.remove();
+        resetTerminalIndexes(card);
+      }
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

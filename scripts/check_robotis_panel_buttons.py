@@ -16,7 +16,17 @@ def main() -> None:
     if missing:
         raise SystemExit(f"Buttons missing JS handlers: {', '.join(missing)}")
 
-    for action in ["save", "test", "run", "stop", "save-advanced"]:
+    for action in [
+        "save",
+        "test",
+        "run",
+        "stop",
+        "save-advanced",
+        "new-workflow",
+        "add-existing-terminal",
+        "add-custom-terminal",
+        "delete-terminal",
+    ]:
         if f'action === "{action}"' not in js_source:
             raise SystemExit(f"Missing product action handler for {action}")
 

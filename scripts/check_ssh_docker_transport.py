@@ -15,8 +15,8 @@ assert "ssh" in built and "robotis@192.168.60.74" in built, built
 assert "docker exec -d open_manipulator" in built, built
 assert "source /opt/ros/jazzy/setup.bash" in built, built
 assert "ros2 launch open_manipulator_bringup omx_f.launch.py" in built, built
-assert "cd ~/ros2_ws" in built, built  # leading ~ preserved for remote expansion (not quoted away)
-assert "cd '~/ros2_ws'" not in built, built
+assert "cd ~/open_manipulator" in built, built  # leading ~ preserved for remote expansion
+assert "cd '~/open_manipulator'" not in built, built
 
 # AI Worker helper_script container command.
 ai = ConnectionTransport(registry.get("ai_worker_jetson"))

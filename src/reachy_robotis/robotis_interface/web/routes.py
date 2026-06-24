@@ -579,6 +579,20 @@ def create_robotis_router(
             return {"ok": False, "error": "invalid_product_workflow", "message": str(exc)}
         return {"ok": True, "product_id": product_id, "workflow_id": workflow_id, "workflow": workflow}
 
+    @router.post("/products/{product_id}/workflows/{workflow_id}")
+    async def create_product_workflow(product_id: str, workflow_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+        """Create a custom multi-terminal workflow from preset or custom terminals."""
+        try:
+            workflow = product_presets.create_workflow(product_id, workflow_id, payload)
+            product_presets.install(
+                robotis_executor.connection_registry,
+                robotis_executor.recipe_catalog,
+                robotis_executor.action_catalog,
+            )
+        except (KeyError, ValueError) as exc:
+            return {"ok": False, "error": "invalid_product_workflow", "message": str(exc)}
+        return {"ok": True, "product_id": product_id, "workflow_id": workflow_id, "workflow": workflow}
+
     @router.get("/connections/{connection_id}")
     async def get_connection(connection_id: str) -> dict[str, Any]:
         """Return one connection profile without secrets."""

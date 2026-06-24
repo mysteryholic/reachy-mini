@@ -10,7 +10,17 @@ button_ids = sorted(set(re.findall(r'<button[^>]+id="([^"]+)"', routes)))
 missing = [button_id for button_id in button_ids if f'target.id === "{button_id}"' not in javascript]
 assert not missing, f"Buttons missing handlers: {missing}"
 
-for action in ("save", "test", "run", "stop", "save-advanced"):
+for action in (
+    "save",
+    "test",
+    "run",
+    "stop",
+    "save-advanced",
+    "new-workflow",
+    "add-existing-terminal",
+    "add-custom-terminal",
+    "delete-terminal",
+):
     assert f'action === "{action}"' in javascript, action
 
 assert 'href="/chat">Open Chat / Voice</a>' in routes

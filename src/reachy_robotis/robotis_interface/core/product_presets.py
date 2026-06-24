@@ -3,6 +3,7 @@ from __future__ import annotations
 from copy import deepcopy
 from pathlib import Path
 from typing import Any
+import re
 
 from reachy_robotis.robotis_interface.core.paths import project_path
 from reachy_robotis.robotis_interface.core.action_catalog import ActionCatalog, ActionDefinition
@@ -53,6 +54,7 @@ class ProductPresetCatalog:
                             "workflow_id": workflow_id,
                             "display_name": str(workflow.get("display_name") or workflow_id),
                             "description": str(workflow.get("description") or ""),
+                            "custom": bool(workflow.get("custom", False)),
                         }
                         for workflow_id, workflow in (product.get("workflows") or {}).items()
                     ],
@@ -147,13 +149,43 @@ class ProductPresetCatalog:
 
     def update_workflow(self, product_id: str, workflow_id: str, payload: dict[str, Any]) -> dict[str, Any]:
         """Persist expert command edits back to the single preset source."""
+        return self.save_workflow(product_id, workflow_id, payload, create=False)
+
+    def create_workflow(self, product_id: str, workflow_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+        """Create one custom product workflow in the preset source."""
+        return self.save_workflow(product_id, workflow_id, payload, create=True)
+
+    def save_workflow(
+        self,
+        product_id: str,
+        workflow_id: str,
+        payload: dict[str, Any],
+        *,
+        create: bool,
+    ) -> dict[str, Any]:
+        """Create or update a workflow after validating its metadata and terminals."""
         product = self._products.get(product_id)
         if product is None:
             raise KeyError(f"Unknown product preset: {product_id}")
+        workflow_id = workflow_id.strip()
+        if not re.fullmatch(r"[a-z][a-z0-9_]*", workflow_id):
+            raise ValueError("Workflow ID must use lowercase letters, numbers, and underscores.")
         workflows = product.get("workflows") or {}
-        if workflow_id not in workflows:
+        if create and workflow_id in workflows:
+            raise ValueError(f"Workflow already exists: {workflow_id}")
+        if not create and workflow_id not in workflows:
             raise KeyError(f"Unknown workflow preset: {workflow_id}")
-        workflow = dict(workflows[workflow_id] or {})
+        if create:
+            for other_product in self._products.values():
+                if workflow_id in (other_product.get("workflows") or {}):
+                    raise ValueError(f"Workflow ID is already used by another product: {workflow_id}")
+        workflow = dict(workflows.get(workflow_id) or {})
+        display_name = str(payload.get("display_name") or workflow.get("display_name") or "").strip()
+        if not display_name:
+            raise ValueError("Workflow name is required.")
+        workflow["display_name"] = display_name
+        workflow["description"] = str(payload.get("description") or workflow.get("description") or "").strip()
+        workflow["custom"] = bool(workflow.get("custom", False) or create)
         triggers = payload.get("triggers")
         if triggers is not None:
             if not isinstance(triggers, list):
@@ -165,7 +197,28 @@ class ProductPresetCatalog:
         terminals = payload.get("terminals")
         if not isinstance(terminals, list) or not terminals:
             raise ValueError("Preset workflow requires at least one terminal.")
-        workflow["terminals"] = [dict(item or {}) for item in terminals]
+        connection_id = str(product.get("connection_id") or product_id)
+        normalized_terminals: list[dict[str, Any]] = []
+        for index, raw_terminal in enumerate(terminals):
+            terminal = dict(raw_terminal or {})
+            terminal.setdefault("connection_id", connection_id)
+            terminal.setdefault("display_name", terminal.get("terminal_id"))
+            terminal.setdefault("command_type", "container")
+            terminal.setdefault("run_mode", "detached")
+            terminal.setdefault("start_order", index + 1)
+            terminal.setdefault("wait_after_start_sec", 0)
+            terminal.setdefault("required", True)
+            normalized_terminals.append(terminal)
+        # Reuse the normal recipe parser for command/type/order/duplicate validation.
+        CommandRecipe.from_mapping(
+            workflow_id,
+            {
+                **workflow,
+                "device": product_id,
+                "terminals": normalized_terminals,
+            },
+        )
+        workflow["terminals"] = normalized_terminals
         workflows[workflow_id] = workflow
         product["workflows"] = workflows
         dump_mapping(self.path, {"products": self._products})
