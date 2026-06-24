@@ -20,7 +20,7 @@ def main() -> None:
         if selector not in js_source:
             raise SystemExit(f"Missing form guard for {selector}")
 
-    if "robotis_panel.js?v=20260623-buttons" not in html_source:
+    if "robotis_panel.js?v=20260624-camera-viz" not in html_source:
         raise SystemExit("robotis_panel.js cache-busting query is missing")
 
     if "window.addEventListener(\"unhandledrejection\"" not in js_source:

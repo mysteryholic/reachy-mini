@@ -20,6 +20,7 @@ for label in (
     "4. Terminal Sessions / Logs",
     "5. OMX Manual Task",
     "6. OMX Hand Teleop",
+    "7. Camera Visualization",
 ):
     assert label in html, label
 

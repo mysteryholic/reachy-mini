@@ -233,7 +233,7 @@ def run(
         else:
             app = settings_app
 
-        mount_robotis_routes(app)
+        mount_robotis_routes(app, camera_worker=camera_worker)
 
         @app.api_route("/", methods=["GET", "HEAD"], include_in_schema=False)
         async def robot_action_interface_root() -> RedirectResponse:
@@ -255,7 +255,7 @@ def run(
         if settings_app is None:
             settings_app = FastAPI()
             standalone_web = True
-        mount_robotis_routes(settings_app)
+        mount_robotis_routes(settings_app, camera_worker=camera_worker)
         stream_manager = LocalStream(
             handler,
             robot,

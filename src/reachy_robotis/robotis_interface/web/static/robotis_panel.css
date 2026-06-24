@@ -565,6 +565,67 @@ td textarea {
   background: var(--panel-soft);
 }
 
+.camera-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(220px, 0.4fr);
+  gap: 18px;
+  margin-top: 12px;
+}
+
+.camera-view {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #0b1220;
+  min-height: 240px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.camera-view img {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.camera-detections h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 8px;
+}
+
+.detection-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel-soft);
+  margin-bottom: 6px;
+}
+
+.detection-label {
+  font-weight: 600;
+}
+
+.detection-conf {
+  color: var(--muted);
+}
+
+.badge {
+  display: inline-block;
+  min-width: 22px;
+  text-align: center;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  color: #fff;
+  background: var(--accent);
+}
+
 .cli-grid,
 .demo-grid {
   display: grid;
@@ -668,7 +729,8 @@ code {
   .dashboard,
   .two-col,
   .builder-layout,
-  .conversation-layout {
+  .conversation-layout,
+  .camera-layout {
     grid-template-columns: 1fr;
   }
 

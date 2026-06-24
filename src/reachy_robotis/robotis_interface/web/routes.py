@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import os
+import time
 import asyncio
 from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, FastAPI, WebSocket, WebSocketDisconnect
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from reachy_robotis.config import config
@@ -20,11 +21,19 @@ from reachy_robotis.robotis_interface.transports.cli_transport import CLITranspo
 from reachy_robotis.robotis_interface.transports.connection_transport import ConnectionTransport
 
 
-def create_robotis_router(executor: ActionExecutor | None = None) -> APIRouter:
+def create_robotis_router(
+    executor: ActionExecutor | None = None,
+    camera_worker: Any = None,
+) -> APIRouter:
     """Create the ROBOTIS VLA interface API router."""
     router = APIRouter(prefix="/robotis", tags=["robotis"])
     robotis_executor = executor or get_robotis_executor()
     device_registry = DeviceRegistry()
+
+    # Camera Visualization (section 7): latest detections are cached so the
+    # snapshot endpoint runs inference once per frame and the detections list
+    # endpoint reuses that result instead of doing a second pass.
+    _camera_state: dict[str, Any] = {"detections": [], "ts": 0.0}
 
     def _app_mode() -> str:
         if os.getenv("SPACE_ID") or os.getenv("SYSTEM") == "spaces":
@@ -266,7 +275,7 @@ def create_robotis_router(executor: ActionExecutor | None = None) -> APIRouter:
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Robot CLI Console</title>
-    <link rel="stylesheet" href="/robotis/static/robotis_panel.css?v=20260623-recipe-grid" />
+    <link rel="stylesheet" href="/robotis/static/robotis_panel.css?v=20260624-camera-viz" />
   </head>
   <body>
     <main class="shell compact-shell">
@@ -402,8 +411,27 @@ source /root/ros2_ws/install/setup.bash</textarea></label>
         </div>
         <div id="teleop-status" class="status-panel"></div>
       </section>
+
+      <section class="console-section">
+        <h2>7. Camera Visualization</h2>
+        <p class="muted">Live camera feed from Reachy Mini with on-frame object detection. Boxes and labels are drawn server-side; the list shows the current detection status.</p>
+        <div class="row">
+          <button id="camera-start" type="button">Start Visualization</button>
+          <button id="camera-stop" type="button" class="secondary">Stop</button>
+          <span id="camera-status" class="muted"></span>
+        </div>
+        <div class="camera-layout">
+          <div class="camera-view">
+            <img id="camera-frame" alt="Camera feed with object detection" />
+          </div>
+          <div class="camera-detections">
+            <h3>Detections <span id="camera-count" class="badge">0</span></h3>
+            <div id="camera-detection-list" class="compact-list"></div>
+          </div>
+        </div>
+      </section>
     </main>
-    <script src="/robotis/static/robotis_panel.js?v=20260623-buttons"></script>
+    <script src="/robotis/static/robotis_panel.js?v=20260624-camera-viz"></script>
   </body>
 </html>
 """
@@ -825,14 +853,90 @@ source /root/ros2_ws/install/setup.bash</textarea></label>
         except WebSocketDisconnect:
             return
 
+    # ----- Section 7: Camera Visualization (live feed + object detection) -----
+
+    def _run_detection(frame: Any) -> list[dict[str, Any]]:
+        """Detect objects on a frame and cache the result for the list view."""
+        from reachy_robotis.vision.object_detector import get_object_detector
+
+        detections = get_object_detector().detect(frame)
+        _camera_state["detections"] = detections
+        _camera_state["ts"] = time.monotonic()
+        return detections
+
+    @router.get("/camera/status")
+    async def camera_status() -> dict[str, Any]:
+        """Report whether the camera feed and object detector are available."""
+        from reachy_robotis.vision.object_detector import get_object_detector
+
+        has_frame = bool(camera_worker is not None and camera_worker.get_latest_frame() is not None)
+        detector = get_object_detector()
+        detection_available = detector.available
+        return {
+            "ok": True,
+            "camera_available": camera_worker is not None,
+            "frame_available": has_frame,
+            "detection_available": detection_available,
+            "detection_error": None if detection_available else detector.error,
+        }
+
+    @router.get("/camera/snapshot")
+    async def camera_snapshot() -> Response:
+        """Return the latest camera frame as JPEG with detection boxes drawn."""
+        import cv2
+
+        from reachy_robotis.vision.object_detector import get_object_detector
+
+        if camera_worker is None:
+            return Response(status_code=503, content=b"camera worker not running")
+        frame = await asyncio.to_thread(camera_worker.get_latest_frame)
+        if frame is None:
+            return Response(status_code=503, content=b"no frame available")
+
+        detections = await asyncio.to_thread(_run_detection, frame)
+        annotated = await asyncio.to_thread(get_object_detector().annotate, frame, detections)
+        ok, buffer = cv2.imencode(".jpg", annotated, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
+        if not ok:
+            return Response(status_code=500, content=b"failed to encode frame")
+        return Response(
+            content=buffer.tobytes(),
+            media_type="image/jpeg",
+            headers={"Cache-Control": "no-store"},
+        )
+
+    @router.get("/camera/detections")
+    async def camera_detections() -> JSONResponse:
+        """Return the detections from the most recent snapshot inference."""
+        from reachy_robotis.vision.object_detector import get_object_detector
+
+        detector = get_object_detector()
+        detections = _camera_state["detections"]
+        counts: dict[str, int] = {}
+        for det in detections:
+            counts[det["label"]] = counts.get(det["label"], 0) + 1
+        return JSONResponse(
+            {
+                "ok": True,
+                "detection_available": detector.available,
+                "detection_error": None if detector.available else detector.error,
+                "count": len(detections),
+                "counts": counts,
+                "detections": detections,
+            }
+        )
+
     return router
 
 
-def mount_robotis_routes(app: FastAPI, executor: ActionExecutor | None = None) -> None:
+def mount_robotis_routes(
+    app: FastAPI,
+    executor: ActionExecutor | None = None,
+    camera_worker: Any = None,
+) -> None:
     """Mount ROBOTIS API routes and panel assets on a FastAPI app."""
     static_dir = Path(__file__).parent / "static"
     try:
         app.mount("/robotis/static", StaticFiles(directory=str(static_dir)), name="robotis_static")
     except Exception:
         pass
-    app.include_router(create_robotis_router(executor))
+    app.include_router(create_robotis_router(executor, camera_worker=camera_worker))

@@ -26,6 +26,10 @@ const state = {
     lastSeq: 0,
     pose: { x: 0.2, y: 0.05, z: 0.22 },
   },
+  camera: {
+    active: false,
+    timer: null,
+  },
   steps: [
     { type: "move_l", params: { x: 0.18, y: 0.1, z: 0.18, duration: 0.5 } },
     { type: "gripper", params: { command: "open", duration: 0.1 } },
@@ -443,6 +447,83 @@ function stopTeleop() {
   renderTeleop();
 }
 
+function renderCameraDetections(payload) {
+  const count = payload.count || 0;
+  setText("#camera-count", String(count));
+  const detections = payload.detections || [];
+  if (!payload.detection_available) {
+    setHtml(
+      "#camera-detection-list",
+      `<p class="muted">Object detection unavailable: ${escapeHtml(payload.detection_error || "install the yolo_vision extra")}</p>`,
+    );
+    return;
+  }
+  if (!detections.length) {
+    setHtml("#camera-detection-list", `<p class="muted">No objects detected.</p>`);
+    return;
+  }
+  const rows = detections
+    .map(
+      (det) =>
+        `<div class="detection-row"><span class="detection-label">${escapeHtml(det.label)}</span><span class="detection-conf">${Math.round(det.confidence * 100)}%</span></div>`,
+    )
+    .join("");
+  setHtml("#camera-detection-list", rows);
+}
+
+async function pollCameraDetections() {
+  try {
+    renderCameraDetections(await api("/camera/detections"));
+  } catch (error) {
+    setHtml("#camera-detection-list", `<p class="muted">${escapeHtml(error.message)}</p>`);
+  }
+}
+
+function refreshCameraFrame() {
+  const img = $("#camera-frame");
+  if (!img) return;
+  // Cache-bust each request so the <img> actually re-fetches the snapshot.
+  img.src = `/robotis/camera/snapshot?t=${Date.now()}`;
+}
+
+async function startCamera() {
+  if (state.camera.active) return;
+  try {
+    const status = await api("/camera/status");
+    if (!status.frame_available) {
+      setText("#camera-status", "No camera frame available (is the camera enabled?).");
+      return;
+    }
+    if (!status.detection_available) {
+      setText("#camera-status", `Streaming feed. Detection off: ${status.detection_error || "yolo_vision extra not installed"}.`);
+    } else {
+      setText("#camera-status", "Live: object detection running.");
+    }
+  } catch (error) {
+    setText("#camera-status", error.message);
+    return;
+  }
+  state.camera.active = true;
+  refreshCameraFrame();
+  pollCameraDetections();
+  // Snapshot inference is CPU-bound; ~1.5s keeps the feed live without pegging the CPU.
+  state.camera.timer = window.setInterval(() => {
+    refreshCameraFrame();
+    pollCameraDetections();
+  }, 1500);
+}
+
+function stopCamera() {
+  state.camera.active = false;
+  if (state.camera.timer) {
+    window.clearInterval(state.camera.timer);
+    state.camera.timer = null;
+  }
+  const img = $("#camera-frame");
+  if (img) img.removeAttribute("src");
+  setText("#camera-status", "Stopped.");
+}
+
 function updateTerminal(input) {
   const terminal = state.recipeTerminals[Number(input.dataset.terminal)];
   if (!terminal) return;
@@ -565,6 +646,8 @@ document.addEventListener("click", async (event) => {
     if (target.id === "load-session-logs") await loadLogs(requireElement("#log-session").value);
     if (target.id === "teleop-start") startTeleop();
     if (target.id === "teleop-stop") stopTeleop();
+    if (target.id === "camera-start") await startCamera();
+    if (target.id === "camera-stop") stopCamera();
     if (target.id === "add-movel") {
       state.steps.push({ type: "move_l", params: { x: 0.18, y: 0.1, z: 0.18, duration: 0.5 } });
       renderSteps();

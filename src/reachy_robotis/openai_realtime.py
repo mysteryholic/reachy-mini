@@ -60,6 +60,14 @@ def _compute_response_cost(usage: Any) -> float:
     return cost
 
 
+_ENGLISH_LOCK = (
+    "\n\nABSOLUTE LANGUAGE LOCK (highest priority, applies to every turn): "
+    "Respond ONLY in English (en-US), both spoken and written. Never reply in "
+    "Korean, Portuguese, Spanish, French, or any other language, even if the user "
+    "speaks that language. No exceptions."
+)
+
+
 class OpenaiRealtimeHandler(AsyncStreamHandler):
     """An OpenAI realtime handler for fastrtc Stream."""
 
@@ -638,7 +646,7 @@ class OpenaiRealtimeHandler(AsyncStreamHandler):
                 await conn.session.update(
                     session={
                         "type": "realtime",
-                        "instructions": get_session_instructions(),
+                        "instructions": get_session_instructions() + _ENGLISH_LOCK,
                         "audio": {
                             "input": {
                                 "format": {

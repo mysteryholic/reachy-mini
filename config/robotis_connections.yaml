@@ -70,10 +70,10 @@
       "user": "robotis",
       "auth": {
         "method": "ssh_key",
-        "key_path": "",
+        "key_path": "~/.ssh/id_ed25519",
         "password_env": "OMX_SSH_PASSWORD"
       },
-      "working_dir": "~/open_manipulator",
+      "working_dir": "~/ros2_ws",
       "container": {
         "mode": "docker_exec",
         "name": "open_manipulator",
