@@ -237,7 +237,7 @@ def run(
 
         @app.api_route("/", methods=["GET", "HEAD"], include_in_schema=False)
         async def robot_action_interface_root() -> RedirectResponse:
-            return RedirectResponse(url="/robotis")
+            return RedirectResponse(url="/chat")
 
         personality_ui.wire_events(handler, stream_manager)
 
@@ -250,7 +250,7 @@ def run(
         app = gr.mount_gradio_app(app, stream.ui, path="/chat")
     else:
         # LocalStream conversation (robot mic/speaker). Serve the web UI on a
-        # FastAPI app: chat panel at "/", control panel at "/robotis". The Reachy
+        # FastAPI app: chat page at "/", robot workflow panel at "/robotis". The Reachy
         # Mini daemon supplies that app; for a standalone run we host one ourselves.
         if settings_app is None:
             settings_app = FastAPI()
@@ -287,8 +287,8 @@ def run(
 
     try:
         if args.gradio and app_stop_event is None:
-            # Standalone gradio run: serve the COMBINED FastAPI app (Robot
-            # Action Interface at "/" + "/robotis", Chat / Voice at "/chat")
+            # Standalone gradio run: serve the combined FastAPI app (Chat /
+            # Voice at "/" and "/chat", Robot Launcher at "/robotis")
             # with uvicorn on all
             # interfaces, so the app is reachable at http://<robot-ip>:7860/ and
             # /robotis/* works on the same port. gr.Blocks.launch() would bind
@@ -298,7 +298,7 @@ def run(
             server_name = os.getenv("GRADIO_SERVER_NAME", "0.0.0.0")
             server_port = int(os.getenv("GRADIO_SERVER_PORT", "7860"))
             logger.info(
-                "Serving app on http://%s:%d (robot action interface at /, chat/voice at /chat)",
+                "Serving app on http://%s:%d (chat/voice at /, robot launcher at /robotis)",
                 server_name,
                 server_port,
             )

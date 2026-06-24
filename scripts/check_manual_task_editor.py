@@ -43,11 +43,11 @@ removed = reloaded.delete("push_box_custom", persist=True, persist_path=tmp)
 assert removed, "delete failed"
 assert TaskCatalog(paths=[tmp]).get("push_box_custom") is None
 
-# The web panel exposes the builder controls.
+# The backend remains available, but the builder is not a main-page section.
 panel = Path(_bootstrap.ROOT) / "src" / "reachy_robotis" / "robotis_interface" / "web" / "routes.py"
 html = panel.read_text(encoding="utf-8")
-for marker in ("OMX Manual Task", "add-movel", "add-open", "add-close", "add-wait", "Save Task"):
-    assert marker in html, marker
+for marker in ("<h2>5. OMX Manual Task</h2>", "add-movel", "add-open", "add-close", "add-wait", "Save Task"):
+    assert marker not in html, marker
 
 tmp.unlink(missing_ok=True)
 print("ok manual task editor")

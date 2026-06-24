@@ -84,6 +84,13 @@ class ActionCatalog:
     def add_or_update(self, action: ActionDefinition) -> None:
         self._actions[action.name] = action
 
+    def install_presets(self, actions: list[ActionDefinition]) -> None:
+        """Put generated product actions first so preset triggers win ties."""
+        preset_names = {action.name for action in actions}
+        remaining = {name: action for name, action in self._actions.items() if name not in preset_names}
+        self._actions = {action.name: action for action in actions}
+        self._actions.update(remaining)
+
     def save(self) -> None:
         from reachy_robotis.robotis_interface.core.yaml_loader import dump_mapping
 

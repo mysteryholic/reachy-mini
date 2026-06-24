@@ -321,7 +321,12 @@ class ActionExecutor:
             recipe_results = []
             if self.recipe_catalog is not None and self.terminal_session_manager is not None:
                 for recipe in self.recipe_catalog.list_recipes():
-                    if recipe.device in target_devices:
+                    active = any(
+                        session.get("recipe_id") == recipe.recipe_id
+                        and session.get("state") in {"pending", "starting", "running", "unknown", "failed"}
+                        for session in self.terminal_session_manager.sessions_snapshot()
+                    )
+                    if recipe.device in target_devices or (device is None and active):
                         recipe_results.append(await self.terminal_session_manager.stop_recipe(recipe.recipe_id))
             results = [await self.adapters[dev].stop() for dev in target_devices]
             ok = all(result.ok for result in results) and all(result.get("ok") for result in recipe_results)

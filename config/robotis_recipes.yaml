@@ -1,63 +1,5 @@
 {
   "recipes": {
-    "omx_bringup_f": {
-      "display_name": "OMX-F Bringup",
-      "device": "omx",
-      "description": "Start the official OMX-F bringup launch file.",
-      "triggers": [
-        "start OMX",
-        "bring up OMX"
-      ],
-      "terminals": [
-        {
-          "terminal_id": "omx_bringup_f",
-          "display_name": "OMX-F Bringup",
-          "connection_id": "omx_pc",
-          "command_type": "container",
-          "command": "ros2 launch open_manipulator_bringup omx_f.launch.py",
-          "run_mode": "detached",
-          "start_order": 1,
-          "wait_after_start_sec": 0.0,
-          "stop_command": "pkill -TERM -f 'omx_f.launch.py|open_manipulator_bringup' || true",
-          "required": true
-        }
-      ]
-    },
-    "omx_moveit": {
-      "display_name": "OMX MoveIt",
-      "device": "omx",
-      "description": "Start OMX-F bringup and MoveIt in separate terminal sessions.",
-      "triggers": [
-        "start OMX MoveIt",
-        "run OMX MoveIt"
-      ],
-      "terminals": [
-        {
-          "terminal_id": "omx_bringup_f",
-          "display_name": "OMX-F Bringup",
-          "connection_id": "omx_pc",
-          "command_type": "container",
-          "command": "ros2 launch open_manipulator_bringup omx_f.launch.py",
-          "run_mode": "detached",
-          "start_order": 1,
-          "wait_after_start_sec": 1.0,
-          "stop_command": "pkill -TERM -f 'omx_f.launch.py|open_manipulator_bringup' || true",
-          "required": true
-        },
-        {
-          "terminal_id": "omx_moveit",
-          "display_name": "OMX MoveIt",
-          "connection_id": "omx_pc",
-          "command_type": "container",
-          "command": "ros2 launch open_manipulator_moveit_config omx_f_moveit.launch.py",
-          "run_mode": "detached",
-          "start_order": 2,
-          "wait_after_start_sec": 0.0,
-          "stop_command": "pkill -TERM -f 'omx_f_moveit.launch.py|moveit' || true",
-          "required": true
-        }
-      ]
-    },
     "omx_play_demo_bag": {
       "display_name": "OMX Demo Rosbag",
       "device": "omx",
@@ -77,29 +19,6 @@
           "start_order": 1,
           "wait_after_start_sec": 0.0,
           "stop_command": "pkill -TERM -f 'ros2 bag play /workspace/bags/omx_demo_motion' || true",
-          "required": true
-        }
-      ]
-    },
-    "omy_moveit": {
-      "display_name": "OMY MoveIt",
-      "device": "omy",
-      "description": "Start OMY bringup and MoveIt in separate terminal sessions.",
-      "triggers": [
-        "start OMY MoveIt",
-        "run OMY MoveIt"
-      ],
-      "terminals": [
-        {
-          "terminal_id": "omy_bringup",
-          "display_name": "OMY Bringup",
-          "connection_id": "omy_raspberry_pi",
-          "command_type": "container",
-          "command": "ros2 launch open_manipulator_bringup omx_f.launch.py",
-          "run_mode": "detached",
-          "start_order": 1,
-          "wait_after_start_sec": 1.0,
-          "stop_command": "pkill -TERM -f 'omy_ai.launch.py|open_manipulator_bringup' || true",
           "required": true
         }
       ]

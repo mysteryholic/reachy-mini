@@ -243,10 +243,12 @@ class LocalStream:
         class ApiKeyPayload(BaseModel):
             openai_api_key: str
 
-        # GET / -> index.html
+        # Open the conversation page by default; the dashboard remains at /robotis.
         @self._settings_app.get("/")
-        def _root() -> FileResponse:
-            return FileResponse(str(index_file))
+        def _root():  # type: ignore[no-untyped-def]
+            from starlette.responses import RedirectResponse
+
+            return RedirectResponse(url="/chat")
 
         # GET /favicon.ico -> optional, avoid noisy 404s on some browsers
         @self._settings_app.get("/favicon.ico")
@@ -321,13 +323,10 @@ class LocalStream:
             ok = OpenaiRealtimeHandler.schedule_text_message(text)
             return JSONResponse({"ok": bool(ok)})
 
-        # The chat panel lives at "/". Browsing to "/chat" (old habit from the
-        # Gradio UI) used to 405 against the POST endpoint, so redirect it home.
+        # The secondary text chat and API key page remains available on demand.
         @self._settings_app.get("/chat")
-        def _chat_redirect():  # type: ignore[no-untyped-def]
-            from starlette.responses import RedirectResponse
-
-            return RedirectResponse(url="/")
+        def _chat_page() -> FileResponse:
+            return FileResponse(str(index_file))
 
         @self._settings_app.get("/chat/messages")
         def _chat_messages(since: int = 0) -> JSONResponse:

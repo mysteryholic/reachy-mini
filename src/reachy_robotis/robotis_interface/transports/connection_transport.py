@@ -19,7 +19,9 @@ from __future__ import annotations
 
 import shlex
 import asyncio
+import os
 import subprocess
+import tempfile
 from typing import Any
 
 from reachy_robotis.robotis_interface.core.schemas import ActionResult
@@ -41,7 +43,9 @@ class ConnectionTransport:
     def _container_exec(self, command: str, *, detached: bool = False) -> str:
         """Wrap a command to run inside the container with ROS sourced."""
         p = self.profile
-        ros_command = " && ".join([*p.ros_setup, command]) if p.ros_setup else command
+        environment = [f"export {key}={shlex.quote(value)}" for key, value in p.ros_env.items()]
+        setup = [*environment, *p.ros_setup]
+        ros_command = " && ".join([*setup, command]) if setup else command
         exec_shell_parts = shlex.split(p.exec_shell or "bash -lc")
         if p.container_mode == "docker_exec":
             if not p.container_name:
@@ -106,14 +110,19 @@ class ConnectionTransport:
         argv = [
             "ssh",
             "-o", "StrictHostKeyChecking=no",
-            # Never fall back to an interactive password prompt — without this,
-            # a host whose key isn't authorized (e.g. ai_worker/omy) makes ssh
-            # hang on "user@host's password:" during status checks / runs.
-            "-o", "BatchMode=yes",
             "-o", f"ConnectTimeout={p.connect_timeout_sec}",
             "-p", str(p.port),
         ]
-        if p.key_path:
+        if p.auth_method in {"password", "password_env"}:
+            argv += [
+                "-o", "BatchMode=no",
+                "-o", "PreferredAuthentications=password,keyboard-interactive",
+                "-o", "PubkeyAuthentication=no",
+                "-o", "NumberOfPasswordPrompts=1",
+            ]
+        else:
+            argv += ["-o", "BatchMode=yes"]
+        if p.key_path and p.auth_method not in {"password", "password_env"}:
             argv += ["-i", p.key_path]
         argv.append(f"{p.user}@{target_host}" if p.user else target_host)
         argv.append(self._remote_payload(command, command_type, run_mode))
@@ -124,6 +133,35 @@ class ConnectionTransport:
         return shlex.join(self.build_argv(command, command_type, run_mode))
 
     # ---- execution ----
+    def _subprocess_environment(self) -> tuple[dict[str, str] | None, str | None]:
+        """Build a one-use SSH_ASKPASS environment without placing secrets in argv."""
+        if self.profile.auth_method not in {"password", "password_env"}:
+            return None, None
+        password = self.profile.password()
+        if not password:
+            raise ValueError("Password authentication is selected, but no password was provided.")
+        handle = tempfile.NamedTemporaryFile("w", prefix="reachy_askpass_", suffix=".sh", delete=False)
+        try:
+            handle.write("#!/bin/sh\nprintf '%s\\n' \"$REACHY_SSH_PASSWORD\"\n")
+            handle.close()
+            os.chmod(handle.name, 0o700)
+        except Exception:
+            try:
+                os.unlink(handle.name)
+            except OSError:
+                pass
+            raise
+        env = os.environ.copy()
+        env.update(
+            {
+                "SSH_ASKPASS": handle.name,
+                "SSH_ASKPASS_REQUIRE": "force",
+                "DISPLAY": env.get("DISPLAY") or "reachy:0",
+                "REACHY_SSH_PASSWORD": password,
+            }
+        )
+        return env, handle.name
+
     def run_command(
         self,
         command: str,
@@ -157,9 +195,18 @@ class ConnectionTransport:
             }
 
         p = self.profile
+        askpass_path: str | None = None
         try:
+            env, askpass_path = self._subprocess_environment()
             if run_mode == "detached":
-                proc = subprocess.run(argv, capture_output=True, text=True, timeout=p.connect_timeout_sec + 10)
+                proc = subprocess.run(
+                    argv,
+                    capture_output=True,
+                    text=True,
+                    timeout=p.connect_timeout_sec + 10,
+                    stdin=subprocess.DEVNULL,
+                    env=env,
+                )
                 rc = proc.returncode
                 return {
                     "ok": rc == 0,
@@ -175,7 +222,14 @@ class ConnectionTransport:
                     "stderr_tail": tail_lines(proc.stderr, 50),
                     "message": "Command submitted" if rc == 0 else f"Command submission failed rc={rc}",
                 }
-            proc = subprocess.run(argv, capture_output=True, text=True, timeout=p.command_timeout_sec)
+            proc = subprocess.run(
+                argv,
+                capture_output=True,
+                text=True,
+                timeout=p.command_timeout_sec,
+                stdin=subprocess.DEVNULL,
+                env=env,
+            )
             rc = proc.returncode
             return {
                 "ok": rc == 0,
@@ -213,6 +267,12 @@ class ConnectionTransport:
                 "stdout_tail": "",
                 "stderr_tail": f"{type(exc).__name__}: {exc}",
             }
+        finally:
+            if askpass_path:
+                try:
+                    os.unlink(askpass_path)
+                except OSError:
+                    pass
 
     async def async_run_command(
         self,

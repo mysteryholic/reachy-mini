@@ -15,8 +15,8 @@ executor = get_robotis_executor()
 # English triggers must resolve to the right registered action.
 cases = {
     "play AI Worker demo": "ai_worker_demo_command",
-    "start AI Worker": "ai_worker_bringup",
-    "play OMY demo": "omy_demo_motion",
+    "start AI Worker": "ai_worker_bg2",
+    "play OMY demo": "omy_demo_bag",
     "start OMY leader mode": "omy_leader_follower",
     "push the box": "omx_push_box_custom",
     "stop all": "stop_all",

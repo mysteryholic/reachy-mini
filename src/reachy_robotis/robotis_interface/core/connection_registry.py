@@ -12,7 +12,7 @@ from reachy_robotis.robotis_interface.core.yaml_loader import load_mapping
 class ConnectionProfile:
     """Resolved SSH connection profile for one robot target."""
 
-    def __init__(self, connection_id: str, data: dict[str, Any]) -> None:
+    def __init__(self, connection_id: str, data: dict[str, Any], password: str = "") -> None:
         self.connection_id = connection_id
         self.display_name = str(data.get("display_name") or connection_id)
         self.target = str(data.get("target") or "")
@@ -25,6 +25,7 @@ class ConnectionProfile:
         self.auth_method = str(auth.get("method") or "ssh_key")
         self.key_path = os.path.expanduser(str(auth.get("key_path") or "")) if auth.get("key_path") else ""
         self.password_env = str(auth.get("password_env") or "")
+        self._password = password
         self.connect_timeout_sec = int(data.get("connect_timeout_sec") or 5)
         self.command_timeout_sec = int(data.get("command_timeout_sec") or 30)
         self.working_dir = str(data.get("working_dir") or "")
@@ -36,7 +37,16 @@ class ConnectionProfile:
         ros = data.get("ros") or {}
         self.ros_distro = str(ros.get("distro") or "")
         self.ros_setup = [str(s) for s in (ros.get("setup") or []) if str(s)]
+        self.ros_env = {str(key): str(value) for key, value in (ros.get("env") or {}).items()}
         self._raw = dict(data)
+
+    def password(self) -> str:
+        """Return the in-memory or environment-backed password without exposing it."""
+        if self._password:
+            return self._password
+        if self.password_env:
+            return os.getenv(self.password_env, "")
+        return ""
 
     def hosts_in_order(self) -> list[str]:
         """Primary host first, then fallbacks."""
@@ -76,6 +86,7 @@ class ConnectionRegistry:
     def __init__(self, path: Path | None = None) -> None:
         self.path = path or project_path("config", "robotis_connections.yaml")
         self._profiles: dict[str, ConnectionProfile] = {}
+        self._runtime_passwords: dict[str, str] = {}
         self.reload()
 
     def reload(self) -> None:
@@ -86,7 +97,12 @@ class ConnectionRegistry:
             if not isinstance(raw, dict):
                 raise ValueError("connections must be a mapping")
             for cid, value in raw.items():
-                profiles[str(cid)] = ConnectionProfile(str(cid), dict(value or {}))
+                connection_id = str(cid)
+                profiles[connection_id] = ConnectionProfile(
+                    connection_id,
+                    dict(value or {}),
+                    password=self._runtime_passwords.get(connection_id, ""),
+                )
         self._profiles = profiles
 
     def list_connections(self) -> dict[str, ConnectionProfile]:
@@ -96,17 +112,47 @@ class ConnectionRegistry:
         return self._profiles.get(connection_id)
 
     def save_connection(self, connection_id: str, data: dict[str, Any]) -> ConnectionProfile:
-        """Persist (add/update) one connection profile. Secrets are not accepted here."""
+        """Persist a profile while keeping a typed password only in memory."""
         from reachy_robotis.robotis_interface.core.yaml_loader import dump_mapping
+
+        safe_data = dict(data)
+        auth = dict(safe_data.get("auth") or {})
+        password = str(auth.pop("password", "") or "")
+        safe_data["auth"] = auth
+        if password:
+            self._runtime_passwords[connection_id] = password
+        elif str(auth.get("method") or "") not in {"password", "password_env"}:
+            self._runtime_passwords.pop(connection_id, None)
 
         existing = load_mapping(self.path) if self.path.exists() else {"connections": {}}
         connections = existing.get("connections") or {}
-        connections[connection_id] = data
+        connections[connection_id] = safe_data
         existing["connections"] = connections
         dump_mapping(self.path, existing)
         self.reload()
         profile = self.get(connection_id)
         assert profile is not None
+        return profile
+
+    def apply_preset(self, connection_id: str, data: dict[str, Any]) -> ConnectionProfile:
+        """Install preset internals while preserving user-entered connection data."""
+        existing = self.get(connection_id)
+        merged = dict(data)
+        if existing is not None:
+            merged["host"] = existing.host
+            merged["port"] = existing.port
+            merged["user"] = existing.user or str(data.get("user") or "")
+            merged["auth"] = {
+                "method": existing.auth_method,
+                "key_path": existing.key_path,
+                "password_env": existing.password_env,
+            }
+        profile = ConnectionProfile(
+            connection_id,
+            merged,
+            password=self._runtime_passwords.get(connection_id, ""),
+        )
+        self._profiles[connection_id] = profile
         return profile
 
     def test_tcp(self, connection_id: str) -> dict[str, Any]:

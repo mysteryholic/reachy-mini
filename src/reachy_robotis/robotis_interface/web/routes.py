@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import shlex
 import time
 import asyncio
 from pathlib import Path
@@ -16,6 +17,7 @@ from reachy_robotis.robotis_interface.adapters.omx_adapter import OMXAdapter
 from reachy_robotis.robotis_interface.core.schemas import TaskDefinition
 from reachy_robotis.robotis_interface.core.device_registry import DeviceRegistry
 from reachy_robotis.robotis_interface.core.action_executor import ActionExecutor
+from reachy_robotis.robotis_interface.core.product_presets import ProductPresetCatalog
 from reachy_robotis.robotis_interface.core.service import get_robotis_executor
 from reachy_robotis.robotis_interface.transports.cli_transport import CLITransport
 from reachy_robotis.robotis_interface.transports.connection_transport import ConnectionTransport
@@ -29,6 +31,7 @@ def create_robotis_router(
     router = APIRouter(prefix="/robotis", tags=["robotis"])
     robotis_executor = executor or get_robotis_executor()
     device_registry = DeviceRegistry()
+    product_presets = ProductPresetCatalog()
 
     # Camera Visualization (section 7): latest detections are cached so the
     # snapshot endpoint runs inference once per frame and the detections list
@@ -204,6 +207,7 @@ def create_robotis_router(
                 profile.to_public_mapping()
                 for profile in robotis_executor.connection_registry.list_connections().values()
             ] if robotis_executor.connection_registry else [],
+            "products": product_presets.public_products(robotis_executor.connection_registry),
         }
 
     async def _refresh_device_statuses() -> None:
@@ -231,6 +235,17 @@ def create_robotis_router(
             robotis_executor.connection_registry.reload()
         if robotis_executor.recipe_catalog is not None:
             robotis_executor.recipe_catalog.reload()
+        if (
+            robotis_executor.connection_registry is not None
+            and robotis_executor.recipe_catalog is not None
+            and robotis_executor.action_catalog is not None
+        ):
+            product_presets.reload()
+            product_presets.install(
+                robotis_executor.connection_registry,
+                robotis_executor.recipe_catalog,
+                robotis_executor.action_catalog,
+            )
         robotis_executor.task_catalog.reload()
 
     def _health_payload() -> dict[str, Any]:
@@ -274,164 +289,51 @@ def create_robotis_router(
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Robot CLI Console</title>
-    <link rel="stylesheet" href="/robotis/static/robotis_panel.css?v=20260624-camera-viz" />
+    <title>Reachy Mini Robot Launcher</title>
+    <link rel="stylesheet" href="/robotis/static/robotis_panel.css?v=20260624-presets" />
   </head>
   <body>
     <main class="shell compact-shell">
       <header class="compact-header">
         <div>
           <p class="eyebrow">Reachy Mini</p>
-          <h1>Conversation-driven CLI Robot Interface</h1>
-          <p class="subtitle">Talk to Reachy Mini, resolve requests into saved robot CLI recipes, deliver them over SSH, and inspect terminal logs.</p>
+          <h1>Reachy Mini Robot Launcher</h1>
+          <p class="subtitle">Choose a ROBOTIS product, enter its network login, and launch a preset workflow.</p>
         </div>
         <div class="hero-actions">
+          <a class="button-link secondary" href="/chat">Open Chat / Voice</a>
           <button id="refresh" type="button">Refresh</button>
           <button id="global-stop" type="button" class="danger">Stop All</button>
         </div>
       </header>
 
       <section class="console-section primary-section">
-        <h2>1. Conversation Control</h2>
-        <div class="conversation-layout">
-          <div class="stack">
-            <label>Say what you want the robot to do<textarea id="conversation-input" rows="3">start OMX MoveIt</textarea></label>
-            <div class="row">
-              <button id="resolve-conversation" type="button" class="secondary">Resolve</button>
-              <button id="run-conversation" type="button">Resolve and Run</button>
-              <a class="button-link secondary" href="/chat">Open Chat / Voice</a>
-            </div>
-            <pre id="conversation-result"></pre>
-          </div>
-          <div>
-            <h3>Conversation Transcript</h3>
-            <div id="conversation-log" class="conversation-log"></div>
-          </div>
+        <h2>1. Product Launcher</h2>
+        <p class="muted">Product presets supply Docker, ROS, launch, and stop settings automatically.</p>
+        <div id="product-cards" class="product-grid"></div>
+      </section>
+
+      <section class="console-section">
+        <h2>2. Last Result</h2>
+        <div id="no-result" class="empty-result">No result yet.</div>
+        <div id="last-result" hidden>
+          <dl class="summary-list">
+            <dt>Last workflow</dt><dd id="result-workflow">None</dd>
+            <dt>Current state</dt><dd id="result-state">None</dd>
+            <dt>Return code</dt><dd id="result-code">None</dd>
+            <dt>Short message</dt><dd id="result-message">None</dd>
+            <dt>stdout tail</dt><dd><pre id="result-stdout" class="log-tail">None</pre></dd>
+            <dt>stderr tail</dt><dd><pre id="result-stderr" class="log-tail">None</pre></dd>
+          </dl>
+          <details class="advanced-block">
+            <summary>Show full logs</summary>
+            <pre id="full-logs"></pre>
+          </details>
         </div>
-      </section>
-
-      <section class="console-section">
-        <h2>2. SSH Delivery Setup</h2>
-        <p class="muted">Save how Reachy Mini reaches each robot control PC. Tests use the currently edited values.</p>
-        <div id="connection-list" class="compact-list"></div>
-        <form id="connection-editor" class="compact-form">
-          <label>Connection ID<input name="connection_id" value="omx_pc" /></label>
-          <label>Host<input name="host" value="192.168.60.74" /></label>
-          <label>Port<input name="port" value="22" /></label>
-          <label>User<input name="user" value="robotis" /></label>
-          <label>Transport<select name="transport"><option>ssh_docker</option><option>ssh</option></select></label>
-          <label>Auth<select name="auth_method"><option>ssh_key</option><option>password_env</option></select></label>
-          <label>SSH key<input name="key_path" value="~/.ssh/id_ed25519" /></label>
-          <label>Password env<input name="password_env" value="OMX_SSH_PASSWORD" /></label>
-          <label>Working dir<input name="working_dir" value="~/ros2_ws" /></label>
-          <label>Container<input name="container_name" value="open_manipulator" /></label>
-          <label>ROS setup<textarea name="ros_setup" rows="2">source /opt/ros/jazzy/setup.bash
-source /root/ros2_ws/install/setup.bash</textarea></label>
-          <input name="display_name" value="OMX Control PC" hidden />
-          <input name="container_mode" value="docker_exec" hidden />
-          <input name="exec_shell" value="bash -lc" hidden />
-          <input name="ros_distro" value="jazzy" hidden />
-          <div class="row">
-            <button id="save-connection" type="button">Save</button>
-            <button id="test-edited-ssh" type="button" class="secondary">Test SSH</button>
-            <button id="test-edited-container" type="button" class="secondary">Test Container</button>
-            <button id="test-edited-ros" type="button" class="secondary">Test ROS</button>
-          </div>
-        </form>
-        <pre id="connection-result"></pre>
-      </section>
-
-      <section class="console-section">
-        <h2>3. Command Recipe</h2>
-        <p class="muted">Build the terminal plan that will run on the saved SSH connection. Use one row per terminal command.</p>
-        <div class="run-bar">
-          <label>Robot<select id="quick-robot"></select></label>
-          <label>Saved recipe<select id="quick-recipe"></select></label>
-          <button id="quick-run" type="button">Run</button>
-          <button id="quick-stop" type="button" class="danger">Stop</button>
-        </div>
-        <form id="recipe-editor" class="compact-recipe">
-          <label>Recipe ID<input name="recipe_id" value="custom_omx_recipe" /></label>
-          <label>Name<input name="display_name" value="Custom OMX Recipe" /></label>
-          <label>Device<select name="device"><option>omx</option><option>omy</option><option>ai_worker</option></select></label>
-          <label>Description<input name="description" value="Run a custom multi-terminal robot CLI workflow." /></label>
-          <label>Triggers<textarea name="triggers" rows="2">start custom OMX recipe</textarea></label>
-          <div class="row">
-            <button id="new-recipe" type="button" class="secondary">New Recipe</button>
-            <button id="add-recipe-terminal" type="button" class="secondary">Add Terminal</button>
-            <button id="save-recipe" type="button">Save Recipe</button>
-            <button id="run-edited-recipe" type="button">Run Edited</button>
-            <button id="delete-edited-recipe" type="button" class="danger">Delete</button>
-          </div>
-          <div id="recipe-list" class="compact-list"></div>
-          <div id="recipe-terminal-table" class="table-wrap"></div>
-        </form>
-        <pre id="result"></pre>
-      </section>
-
-      <section class="console-section">
-        <h2>4. Terminal Sessions / Logs</h2>
-        <div id="session-table" class="table-wrap"></div>
-        <label>Session<select id="log-session"></select></label>
-        <button id="load-session-logs" type="button" class="secondary">Load Logs</button>
-        <pre id="log-viewer"></pre>
-      </section>
-
-      <section class="console-section">
-        <h2>5. OMX Manual Task</h2>
-        <form id="task-builder" class="builder-layout">
-          <div class="stack">
-            <label>Load existing task<select id="task-load-select"></select></label>
-            <label>Task name<input name="name" value="custom_omx_task" /></label>
-            <label>Name<input name="display_name" value="Custom OMX Task" /></label>
-            <label>Trigger<input name="trigger" value="custom task" /></label>
-            <div class="row">
-              <button id="add-movel" type="button" class="secondary">Add MoveL</button>
-              <button id="add-open" type="button" class="secondary">Gripper Open</button>
-              <button id="add-close" type="button" class="secondary">Gripper Close</button>
-              <button id="add-wait" type="button" class="secondary">Wait</button>
-            </div>
-            <div id="step-table" class="table-wrap"></div>
-            <div class="row">
-              <button type="submit">Save Task</button>
-              <button id="run-built-task" type="button">Run Task</button>
-              <button id="delete-built-task" type="button" class="danger">Delete task</button>
-            </div>
-          </div>
-          <pre id="export-yaml"></pre>
-        </form>
-      </section>
-
-      <section class="console-section">
-        <h2>6. OMX Hand Teleop</h2>
-        <p class="muted">Keep this simple for now: start, stop, and watch the session state.</p>
-        <div class="row">
-          <button id="teleop-start" type="button">Start Teleop</button>
-          <button id="teleop-stop" type="button" class="secondary">Stop Teleop</button>
-        </div>
-        <div id="teleop-status" class="status-panel"></div>
-      </section>
-
-      <section class="console-section">
-        <h2>7. Camera Visualization</h2>
-        <p class="muted">Live camera feed from Reachy Mini with on-frame object detection. Boxes and labels are drawn server-side; the list shows the current detection status.</p>
-        <div class="row">
-          <button id="camera-start" type="button">Start Visualization</button>
-          <button id="camera-stop" type="button" class="secondary">Stop</button>
-          <span id="camera-status" class="muted"></span>
-        </div>
-        <div class="camera-layout">
-          <div class="camera-view">
-            <img id="camera-frame" alt="Camera feed with object detection" />
-          </div>
-          <div class="camera-detections">
-            <h3>Detections <span id="camera-count" class="badge">0</span></h3>
-            <div id="camera-detection-list" class="compact-list"></div>
-          </div>
-        </div>
+        <div id="result" class="result-message muted" aria-live="polite"></div>
       </section>
     </main>
-    <script src="/robotis/static/robotis_panel.js?v=20260624-camera-viz"></script>
+    <script src="/robotis/static/robotis_panel.js?v=20260624-presets"></script>
   </body>
 </html>
 """
@@ -618,6 +520,65 @@ source /root/ros2_ws/install/setup.bash</textarea></label>
             return {"ok": False, "error": "connection_registry_unavailable", "connections": []}
         return {"ok": True, "connections": [p.to_public_mapping() for p in cr.list_connections().values()]}
 
+    @router.get("/products")
+    async def list_products() -> dict[str, Any]:
+        """List safe product presets and their user-facing workflows."""
+        _reload_editable_config()
+        return {
+            "ok": True,
+            "products": product_presets.public_products(robotis_executor.connection_registry),
+        }
+
+    @router.post("/products/{product_id}/connection")
+    async def save_product_connection(product_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+        """Save only user-owned host and authentication fields onto preset defaults."""
+        cr = robotis_executor.connection_registry
+        if cr is None:
+            return {"ok": False, "error": "connection_registry_unavailable"}
+        auth_method = str(payload.get("auth_method") or "password")
+        auth = {
+            "method": auth_method,
+            "password": str(payload.get("password") or ""),
+            "key_path": str(payload.get("key_path") or ""),
+            "password_env": "",
+        }
+        try:
+            connection_id, connection = product_presets.connection_payload(
+                product_id,
+                host=str(payload.get("host") or "").strip(),
+                port=int(payload.get("port") or 22),
+                user=str(payload.get("user") or "").strip(),
+                auth=auth,
+            )
+        except (KeyError, ValueError) as exc:
+            return {"ok": False, "error": "invalid_product_connection", "message": str(exc)}
+        profile = cr.save_connection(connection_id, connection)
+        product_presets.install(cr, robotis_executor.recipe_catalog, robotis_executor.action_catalog)
+        robotis_executor.record_event(f"Product connection saved: {product_id}")
+        return {"ok": True, "product_id": product_id, "connection": profile.to_public_mapping()}
+
+    @router.post("/products/{product_id}/test")
+    async def test_product_connection(product_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+        """Save the simple product form and run the complete connection test."""
+        saved = await save_product_connection(product_id, payload)
+        if not saved.get("ok"):
+            return saved
+        return await test_connection(str(saved["connection"]["connection_id"]))
+
+    @router.put("/products/{product_id}/workflows/{workflow_id}")
+    async def update_product_workflow(product_id: str, workflow_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+        """Persist expert command edits to the product preset file."""
+        try:
+            workflow = product_presets.update_workflow(product_id, workflow_id, payload)
+            product_presets.install(
+                robotis_executor.connection_registry,
+                robotis_executor.recipe_catalog,
+                robotis_executor.action_catalog,
+            )
+        except (KeyError, ValueError) as exc:
+            return {"ok": False, "error": "invalid_product_workflow", "message": str(exc)}
+        return {"ok": True, "product_id": product_id, "workflow_id": workflow_id, "workflow": workflow}
+
     @router.get("/connections/{connection_id}")
     async def get_connection(connection_id: str) -> dict[str, Any]:
         """Return one connection profile without secrets."""
@@ -632,7 +593,7 @@ source /root/ros2_ws/install/setup.bash</textarea></label>
 
     @router.post("/connections/{connection_id}")
     async def save_connection(connection_id: str, payload: dict[str, Any]) -> dict[str, Any]:
-        """Persist one connection profile. Secrets must remain in environment variables."""
+        """Persist a profile while keeping a typed password only in memory."""
         cr = robotis_executor.connection_registry
         if cr is None:
             return {"ok": False, "error": "connection_registry_unavailable"}
@@ -642,8 +603,59 @@ source /root/ros2_ws/install/setup.bash</textarea></label>
 
     @router.post("/connections/{connection_id}/test")
     async def test_connection(connection_id: str) -> dict[str, Any]:
-        """Test a connection profile. Step 1 = TCP reachability (fast, safe)."""
-        return await test_connection_tcp(connection_id)
+        """Run the complete one-click connection check."""
+        cr = robotis_executor.connection_registry
+        if cr is None:
+            return {"ok": False, "message": "Connection test failed: Connection registry is unavailable."}
+        profile = cr.get(connection_id)
+        if profile is None:
+            return {"ok": False, "message": f"Connection test failed: Unknown connection {connection_id}."}
+
+        details: list[dict[str, Any]] = []
+        tcp = await asyncio.to_thread(cr.test_tcp, connection_id)
+        details.append(tcp)
+        if not tcp.get("ok"):
+            return {
+                "ok": False,
+                "step": "tcp",
+                "message": f"Connection test failed: Cannot reach host {profile.host}:{profile.port}",
+                "suggestion": "Check if Reachy Mini and the robot PC are on the same network.",
+                "details": details,
+            }
+
+        checks = [("ssh", "true", "host")]
+        if profile.container_mode == "docker_exec":
+            checks.append(("container", f"docker inspect -- {shlex.quote(profile.container_name)}", "host"))
+        elif profile.container_mode == "helper_script":
+            checks.append(("container", f"test -x {shlex.quote(profile.helper_script)}", "host"))
+        if profile.target != "hx5_hand":
+            checks.append(("ros", "ros2 topic list", "container"))
+        for step, command, command_type in checks:
+            result = await _connection_command_test(connection_id, step, command, command_type)
+            details.append(result)
+            if not result.get("ok"):
+                messages = {
+                    "ssh": f"SSH login failed for {profile.user}@{profile.host}.",
+                    "container": (
+                        f"Docker container {profile.container_name} was not found."
+                        if profile.container_mode == "docker_exec"
+                        else f"Container helper {profile.helper_script} is unavailable."
+                    ),
+                    "ros": "ROS setup or ros2 topic list failed.",
+                }
+                suggestions = {
+                    "ssh": "Check the user, password, SSH key, and SSH server settings.",
+                    "container": "Check the container name and make sure the container is running.",
+                    "ros": "Check the ROS distro, setup scripts, and workspace installation.",
+                }
+                return {
+                    "ok": False,
+                    "step": step,
+                    "message": f"Connection test failed: {messages[step]}",
+                    "suggestion": suggestions[step],
+                    "details": details,
+                }
+        return {"ok": True, "message": "Connection test: OK", "details": details}
 
     @router.post("/connections/{connection_id}/test/tcp")
     async def test_connection_tcp(connection_id: str) -> dict[str, Any]:

@@ -16,8 +16,8 @@ executor = get_robotis_executor()
 async def main() -> None:
     checks = {
         "start OMX AI": ("omx_bringup_ai", "bringup_ai", "omx_ai.launch.py"),
-        "start OMX": ("omx_bringup_f", "bringup_f", "omx_f.launch.py"),
-        "play OMX rosbag": ("omx_play_demo_bag", "play_demo_bag", "ros2 bag play /workspace/bags/omx_demo_motion"),
+        "start OMX": ("omx_bringup", "", "omx_f.launch.py"),
+        "play OMX demo": ("omx_demo_bag", "", "ros2 bag play /workspace/bags/omx_demo_motion"),
         "stop OMX": ("omx_stop", "stop", "pkill -TERM"),
     }
     for phrase, (action_name, command_key, command_text) in checks.items():

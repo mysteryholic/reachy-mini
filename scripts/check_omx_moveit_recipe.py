@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import _bootstrap  # noqa: F401
 
-from reachy_robotis.robotis_interface.core.recipe_catalog import RecipeCatalog
+from reachy_robotis.robotis_interface.core.product_presets import ProductPresetCatalog
 
 
-recipe = RecipeCatalog().get("omx_moveit")
+recipe = next(recipe for recipe in ProductPresetCatalog().recipes() if recipe.recipe_id == "omx_moveit")
 assert recipe is not None, "omx_moveit recipe missing"
 assert recipe.device == "omx", recipe
 assert len(recipe.terminals) >= 2, recipe

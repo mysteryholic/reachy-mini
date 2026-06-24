@@ -86,6 +86,100 @@ body {
   text-align: left;
 }
 
+.full-width {
+  grid-column: 1 / -1;
+}
+
+.summary-list {
+  margin-top: 14px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel-soft);
+}
+
+.summary-list dt,
+.summary-list dd {
+  padding: 3px 0;
+}
+
+.advanced-block {
+  margin-top: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel-soft);
+}
+
+.advanced-block summary {
+  cursor: pointer;
+  padding: 10px 12px;
+  color: var(--muted);
+  font-weight: 650;
+}
+
+.advanced-content {
+  padding: 0 12px 12px;
+}
+
+.workflow-summary {
+  min-height: 62px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel-soft);
+}
+
+.workflow-summary span,
+.workflow-summary strong {
+  display: block;
+}
+
+.workflow-summary span {
+  margin-bottom: 4px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.workflow-details {
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel-soft);
+}
+
+.workflow-details article + article {
+  margin-top: 12px;
+}
+
+.workflow-details code {
+  display: block;
+  margin-top: 4px;
+  overflow-wrap: anywhere;
+  color: var(--muted);
+}
+
+.result-message {
+  margin-top: 10px;
+  white-space: pre-line;
+}
+
+.empty-result {
+  padding: 18px;
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.log-tail {
+  max-height: 110px;
+  margin: 0;
+  overflow: auto;
+  background: transparent;
+  color: inherit;
+}
+
 .shell {
   width: min(1320px, calc(100vw - 32px));
   margin: 0 auto;
@@ -761,4 +855,95 @@ code {
     grid-template-columns: 1fr;
   }
 
+}
+
+.summary-list pre.log-tail {
+  min-height: 0;
+  max-height: 110px;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+}
+
+.product-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.product-card {
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel-soft);
+}
+
+.product-card > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.product-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.workflow-description {
+  min-height: 40px;
+  margin: 10px 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.credential-note {
+  margin-top: 9px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.card-result {
+  display: grid;
+  gap: 3px;
+  min-height: 38px;
+  margin-top: 10px;
+  font-size: 13px;
+}
+
+.advanced-terminal {
+  display: grid;
+  gap: 8px;
+  padding: 10px 0;
+  border-top: 1px solid var(--line);
+}
+
+.advanced-terminal textarea {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font: inherit;
+  resize: vertical;
+}
+
+[data-advanced-triggers] {
+  width: 100%;
+  margin-bottom: 10px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font: inherit;
+  resize: vertical;
+}
+
+@media (max-width: 820px) {
+  .product-grid,
+  .product-fields {
+    grid-template-columns: 1fr;
+  }
 }

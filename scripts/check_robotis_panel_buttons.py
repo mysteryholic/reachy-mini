@@ -16,11 +16,11 @@ def main() -> None:
     if missing:
         raise SystemExit(f"Buttons missing JS handlers: {', '.join(missing)}")
 
-    for selector in ["#connection-editor", "#recipe-editor", "#task-builder"]:
-        if selector not in js_source:
-            raise SystemExit(f"Missing form guard for {selector}")
+    for action in ["save", "test", "run", "stop", "save-advanced"]:
+        if f'action === "{action}"' not in js_source:
+            raise SystemExit(f"Missing product action handler for {action}")
 
-    if "robotis_panel.js?v=20260624-camera-viz" not in html_source:
+    if "robotis_panel.js?v=20260624-presets" not in html_source:
         raise SystemExit("robotis_panel.js cache-busting query is missing")
 
     if "window.addEventListener(\"unhandledrejection\"" not in js_source:

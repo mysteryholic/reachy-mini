@@ -14,6 +14,7 @@ from reachy_robotis.robotis_interface.core.command_catalog import CommandCatalog
 from reachy_robotis.robotis_interface.adapters.ai_worker_adapter import AIWorkerAdapter
 from reachy_robotis.robotis_interface.core.intent_resolver import IntentResolver
 from reachy_robotis.robotis_interface.core.connection_registry import ConnectionRegistry
+from reachy_robotis.robotis_interface.core.product_presets import ProductPresetCatalog
 from reachy_robotis.robotis_interface.transports.cli_transport import CLITransport
 from reachy_robotis.robotis_interface.core.terminal_session_manager import TerminalSessionManager
 
@@ -75,6 +76,8 @@ def get_robotis_executor() -> ActionExecutor:
     command_catalog = CommandCatalog()
     action_catalog = ActionCatalog()
     recipe_catalog = RecipeCatalog()
+    product_presets = ProductPresetCatalog()
+    product_presets.install(connection_registry, recipe_catalog, action_catalog)
     terminal_session_manager = TerminalSessionManager(recipe_catalog, connection_registry)
     resolver = IntentResolver(task_catalog, command_catalog, action_catalog, recipe_catalog)
 

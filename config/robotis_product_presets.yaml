@@ -1,0 +1,362 @@
+{
+  "products": {
+    "omx": {
+      "display_name": "OMX",
+      "connection_id": "omx_pc",
+      "default_user": "robotis",
+      "default_transport": "ssh_docker",
+      "default_working_dir": "~/open_manipulator",
+      "docker": {
+        "mode": "docker_exec",
+        "container_name_candidates": [
+          "open_manipulator"
+        ],
+        "helper_script_candidates": [
+          "./docker/container.sh"
+        ]
+      },
+      "ros": {
+        "distro": "jazzy",
+        "setup": [
+          "source /opt/ros/jazzy/setup.bash",
+          "source /root/ros2_ws/install/setup.bash"
+        ]
+      },
+      "workflows": {
+        "omx_bringup": {
+          "display_name": "OMX Bringup",
+          "description": "Start the official OMX-F bringup.",
+          "triggers": [
+            "start OMX",
+            "bring up OMX"
+          ],
+          "terminals": [
+            {
+              "terminal_id": "omx_bringup",
+              "display_name": "OMX Bringup",
+              "command": "ros2 launch open_manipulator_bringup omx_f.launch.py",
+              "run_mode": "detached",
+              "start_order": 1,
+              "wait_after_start_sec": 0,
+              "stop_command": "pkill -TERM -f 'omx_f.launch.py|open_manipulator_bringup' || true"
+            }
+          ]
+        },
+        "omx_moveit": {
+          "display_name": "OMX MoveIt",
+          "description": "Start OMX bringup and MoveIt.",
+          "triggers": [
+            "start OMX MoveIt",
+            "run OMX MoveIt"
+          ],
+          "terminals": [
+            {
+              "terminal_id": "omx_bringup",
+              "display_name": "OMX Bringup",
+              "command": "ros2 launch open_manipulator_bringup omx_f.launch.py",
+              "run_mode": "detached",
+              "start_order": 1,
+              "wait_after_start_sec": 3,
+              "stop_command": "pkill -TERM -f 'omx_f.launch.py|open_manipulator_bringup' || true"
+            },
+            {
+              "terminal_id": "omx_moveit",
+              "display_name": "OMX MoveIt",
+              "command": "ros2 launch open_manipulator_moveit_config omx_f_moveit.launch.py",
+              "run_mode": "detached",
+              "start_order": 2,
+              "wait_after_start_sec": 0,
+              "stop_command": "pkill -TERM -f 'omx_f_moveit.launch.py|moveit|rviz2' || true"
+            }
+          ]
+        },
+        "omx_gui": {
+          "display_name": "OMX GUI",
+          "description": "Start OMX bringup, MoveIt, and GUI.",
+          "triggers": [
+            "start OMX GUI",
+            "run OMX GUI"
+          ],
+          "terminals": [
+            {
+              "terminal_id": "omx_bringup",
+              "display_name": "OMX Bringup",
+              "command": "ros2 launch open_manipulator_bringup omx_f.launch.py",
+              "run_mode": "detached",
+              "start_order": 1,
+              "wait_after_start_sec": 3,
+              "stop_command": "pkill -TERM -f 'omx_f.launch.py|open_manipulator_bringup' || true"
+            },
+            {
+              "terminal_id": "omx_moveit",
+              "display_name": "OMX MoveIt",
+              "command": "ros2 launch open_manipulator_moveit_config omx_f_moveit.launch.py",
+              "run_mode": "detached",
+              "start_order": 2,
+              "wait_after_start_sec": 3,
+              "stop_command": "pkill -TERM -f 'omx_f_moveit.launch.py|moveit|rviz2' || true"
+            },
+            {
+              "terminal_id": "omx_gui",
+              "display_name": "OMX GUI",
+              "command": "ros2 launch open_manipulator_gui omx_f_gui.launch.py",
+              "run_mode": "detached",
+              "start_order": 3,
+              "wait_after_start_sec": 0,
+              "stop_command": "pkill -TERM -f 'omx_f_gui.launch.py|open_manipulator_gui' || true"
+            }
+          ]
+        },
+        "omx_demo_bag": {
+          "display_name": "OMX Demo Bag",
+          "description": "Play a user-created OMX rosbag.",
+          "triggers": [
+            "play OMX demo",
+            "play OMX bag"
+          ],
+          "terminals": [
+            {
+              "terminal_id": "omx_demo_bag",
+              "display_name": "OMX Demo Bag",
+              "command": "ros2 bag play /workspace/bags/omx_demo_motion",
+              "run_mode": "detached",
+              "start_order": 1,
+              "wait_after_start_sec": 0,
+              "stop_command": "pkill -TERM -f 'ros2 bag play /workspace/bags/omx_demo_motion' || true"
+            }
+          ]
+        }
+      }
+    },
+    "omy": {
+      "display_name": "OMY",
+      "connection_id": "omy_raspberry_pi",
+      "default_user": "root",
+      "default_transport": "ssh_docker",
+      "default_working_dir": "/data/docker/open_manipulator",
+      "docker": {
+        "mode": "helper_script",
+        "helper_script": "./docker/container.sh"
+      },
+      "ros": {
+        "distro": "jazzy",
+        "env": {
+          "ROS_DOMAIN_ID": "30"
+        },
+        "setup": [
+          "source /opt/ros/jazzy/setup.bash",
+          "source /root/ros2_ws/install/setup.bash"
+        ]
+      },
+      "workflows": {
+        "omy_teleop": {
+          "display_name": "OMY AI Teleoperation",
+          "description": "Start official OMY AI leader-follower teleoperation.",
+          "triggers": [
+            "start OMY teleoperation",
+            "start OMY AI",
+            "start OMY"
+          ],
+          "terminals": [
+            {
+              "terminal_id": "omy_ai",
+              "display_name": "OMY AI Teleoperation",
+              "connection_id": "omy_raspberry_pi",
+              "command_type": "container",
+              "command": "ros2 launch open_manipulator_bringup omy_ai.launch.py",
+              "run_mode": "detached",
+              "start_order": 1,
+              "wait_after_start_sec": 0,
+              "stop_command": "pkill -TERM -f 'omy_ai.launch.py|open_manipulator_bringup' || true",
+              "required": true
+            }
+          ]
+        },
+        "omy_moveit": {
+          "display_name": "OMY MoveIt",
+          "description": "Start OMY bringup and MoveIt.",
+          "triggers": [
+            "start OMY MoveIt",
+            "run OMY MoveIt"
+          ],
+          "terminals": [
+            {
+              "terminal_id": "omy_bringup",
+              "display_name": "OMY Bringup",
+              "command": "ros2 launch open_manipulator_bringup omy_f3m.launch.py",
+              "run_mode": "detached",
+              "start_order": 1,
+              "wait_after_start_sec": 3,
+              "stop_command": "pkill -TERM -f 'omy_f3m.launch.py|open_manipulator_bringup|controller_manager|ros2_control_node|robot_state_publisher' || true"
+            },
+            {
+              "terminal_id": "omy_moveit",
+              "display_name": "OMY MoveIt",
+              "command": "ros2 launch open_manipulator_moveit_config omy_f3m_moveit.launch.py",
+              "run_mode": "detached",
+              "start_order": 2,
+              "wait_after_start_sec": 0,
+              "stop_command": "pkill -TERM -f 'omy_f3m_moveit.launch.py|moveit|rviz2' || true"
+            }
+          ]
+        },
+        "omy_gui": {
+          "display_name": "OMY GUI",
+          "description": "Start OMY bringup, MoveIt, and GUI.",
+          "triggers": [
+            "start OMY GUI",
+            "run OMY GUI"
+          ],
+          "terminals": [
+            {
+              "terminal_id": "omy_bringup",
+              "display_name": "OMY Bringup",
+              "command": "ros2 launch open_manipulator_bringup omy_f3m.launch.py",
+              "run_mode": "detached",
+              "start_order": 1,
+              "wait_after_start_sec": 3,
+              "stop_command": "pkill -TERM -f 'omy_f3m.launch.py|open_manipulator_bringup|controller_manager|ros2_control_node|robot_state_publisher' || true"
+            },
+            {
+              "terminal_id": "omy_moveit",
+              "display_name": "OMY MoveIt",
+              "command": "ros2 launch open_manipulator_moveit_config omy_f3m_moveit.launch.py",
+              "run_mode": "detached",
+              "start_order": 2,
+              "wait_after_start_sec": 3,
+              "stop_command": "pkill -TERM -f 'omy_f3m_moveit.launch.py|moveit|rviz2' || true"
+            },
+            {
+              "terminal_id": "omy_gui",
+              "display_name": "OMY GUI",
+              "command": "ros2 launch open_manipulator_gui omy_f3m_gui.launch.py",
+              "run_mode": "detached",
+              "start_order": 3,
+              "wait_after_start_sec": 0,
+              "stop_command": "pkill -TERM -f 'omy_f3m_gui.launch.py|open_manipulator_gui' || true"
+            }
+          ]
+        },
+        "omy_demo_bag": {
+          "display_name": "OMY Demo Bag",
+          "description": "Play a user-created OMY rosbag.",
+          "triggers": [
+            "play OMY demo",
+            "play OMY bag"
+          ],
+          "terminals": [
+            {
+              "terminal_id": "omy_demo_bag",
+              "display_name": "OMY Demo Bag",
+              "command": "ros2 bag play /workspace/bags/omy_demo_motion",
+              "run_mode": "detached",
+              "start_order": 1,
+              "wait_after_start_sec": 0,
+              "stop_command": "pkill -TERM -f 'ros2 bag play /workspace/bags/omy_demo_motion' || true"
+            }
+          ]
+        }
+      }
+    },
+    "ai_worker": {
+      "display_name": "AI Worker",
+      "connection_id": "ai_worker_jetson",
+      "default_user": "robotis",
+      "default_transport": "ssh_docker",
+      "default_working_dir": "~/ai_worker",
+      "docker": {
+        "mode": "helper_script",
+        "helper_script": "./docker/container.sh"
+      },
+      "ros": {
+        "distro": "jazzy",
+        "env": {
+          "ROS_DOMAIN_ID": "30"
+        },
+        "setup": [
+          "source /opt/ros/jazzy/setup.bash",
+          "source /root/ros2_ws/install/setup.bash"
+        ]
+      },
+      "workflows": {
+        "ai_worker_bg2": {
+          "display_name": "AI Worker BG2",
+          "description": "Start AI Worker BG2 all-in-one teleoperation.",
+          "triggers": [
+            "start AI Worker",
+            "start AI Worker BG2"
+          ],
+          "terminals": [
+            {
+              "terminal_id": "ai_worker_bg2",
+              "display_name": "AI Worker BG2",
+              "command": "ros2 launch ffw_bringup ffw_bg2_ai.launch.py",
+              "run_mode": "detached",
+              "start_order": 1,
+              "wait_after_start_sec": 0,
+              "stop_command": "pkill -TERM -f 'ffw_bg2_ai|ffw_bringup|ros2 launch' || true"
+            }
+          ]
+        },
+        "ai_worker_sg2": {
+          "display_name": "AI Worker SG2",
+          "description": "Start AI Worker SG2 all-in-one teleoperation.",
+          "triggers": [
+            "start AI Worker SG2"
+          ],
+          "terminals": [
+            {
+              "terminal_id": "ai_worker_sg2",
+              "display_name": "AI Worker SG2",
+              "command": "ros2 launch ffw_bringup ffw_sg2_ai.launch.py",
+              "run_mode": "detached",
+              "start_order": 1,
+              "wait_after_start_sec": 0,
+              "stop_command": "pkill -TERM -f 'ffw_sg2_ai|ffw_bringup|ros2 launch' || true"
+            }
+          ]
+        }
+      }
+    },
+    "hx5_hand": {
+      "display_name": "HX5 Hand",
+      "connection_id": "hx5_hand",
+      "default_user": "robotis",
+      "default_transport": "ssh_docker",
+      "default_working_dir": "~/robotis_hand",
+      "docker": {
+        "mode": "helper_script",
+        "helper_script": "./docker/container.sh"
+      },
+      "ros": {
+        "distro": "jazzy",
+        "setup": [
+          "source /opt/ros/jazzy/setup.bash",
+          "source /root/ros2_ws/install/setup.bash"
+        ]
+      },
+      "workflows": {
+        "hx5_container_start": {
+          "display_name": "HX5 Container Start",
+          "description": "Start the ROBOTIS Hand Docker container.",
+          "triggers": [
+            "start HX5 container",
+            "start hand container"
+          ],
+          "terminals": [
+            {
+              "terminal_id": "hx5_container_start",
+              "display_name": "HX5 Container Start",
+              "command": "./docker/container.sh start",
+              "command_type": "host",
+              "run_mode": "foreground",
+              "start_order": 1,
+              "wait_after_start_sec": 0,
+              "stop_command": "./docker/container.sh stop"
+            }
+          ]
+        }
+      }
+    }
+  }
+}

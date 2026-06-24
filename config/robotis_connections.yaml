@@ -61,7 +61,7 @@
       }
     },
     "omx_pc": {
-      "display_name": "OMX Control PC",
+      "display_name": "OMX",
       "target": "omx",
       "transport": "ssh_docker",
       "host": "192.168.60.74",
@@ -69,14 +69,15 @@
       "port": 22,
       "user": "robotis",
       "auth": {
-        "method": "ssh_key",
-        "key_path": "~/.ssh/id_ed25519",
-        "password_env": "OMX_SSH_PASSWORD"
+        "method": "password",
+        "key_path": "",
+        "password_env": ""
       },
-      "working_dir": "~/ros2_ws",
+      "working_dir": "~/open_manipulator",
       "container": {
         "mode": "docker_exec",
         "name": "open_manipulator",
+        "helper_script": "./docker/container.sh",
         "exec_shell": "bash -lc"
       },
       "ros": {

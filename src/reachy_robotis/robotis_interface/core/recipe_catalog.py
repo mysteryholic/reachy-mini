@@ -115,6 +115,7 @@ class RecipeCatalog:
     def __init__(self, path: Path | None = None) -> None:
         self.path = path or project_path("config", "robotis_recipes.yaml")
         self._recipes: dict[str, CommandRecipe] = {}
+        self._preset_ids: set[str] = set()
         self.reload()
 
     def reload(self) -> None:
@@ -127,6 +128,7 @@ class RecipeCatalog:
             for recipe_id, payload in raw.items():
                 recipes[str(recipe_id)] = CommandRecipe.from_mapping(str(recipe_id), dict(payload or {}))
         self._recipes = recipes
+        self._preset_ids = set()
 
     def list_recipes(self) -> list[CommandRecipe]:
         return list(self._recipes.values())
@@ -138,6 +140,12 @@ class RecipeCatalog:
         self._recipes[recipe.recipe_id] = recipe
         if persist:
             self.save()
+
+    def install_presets(self, recipes: list[CommandRecipe]) -> None:
+        """Install generated product workflows as authoritative runtime recipes."""
+        for recipe in recipes:
+            self._recipes[recipe.recipe_id] = recipe
+            self._preset_ids.add(recipe.recipe_id)
 
     def delete(self, recipe_id: str, *, persist: bool = False) -> bool:
         removed = self._recipes.pop(recipe_id, None) is not None
@@ -161,6 +169,7 @@ class RecipeCatalog:
                         if key != "recipe_id"
                     }
                     for recipe in self.list_recipes()
+                    if recipe.recipe_id not in self._preset_ids
                 }
             },
         )

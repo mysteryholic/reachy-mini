@@ -106,7 +106,7 @@ actions:
       - "start OMX follower"
     run:
       method: "start_recipe"
-      recipe_id: "omx_bringup_f"
+      recipe_id: "omx_bringup"
 
   - name: omx_moveit
     display_name: "OMX MoveIt"
