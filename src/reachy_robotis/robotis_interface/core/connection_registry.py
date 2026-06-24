@@ -67,7 +67,7 @@ class ConnectionProfile:
             "user": self.user,
             "auth_method": self.auth_method,
             "key_path": self.key_path,
-            "password_env": self.password_env,  # the env var NAME, not the secret
+            "password_env": self.password_env,
             "connect_timeout_sec": self.connect_timeout_sec,
             "command_timeout_sec": self.command_timeout_sec,
             "working_dir": self.working_dir,

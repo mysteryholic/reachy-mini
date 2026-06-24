@@ -40,13 +40,10 @@ class RunRobotisAction(Tool):
         if kind:
             result = await executor.run_action(str(kind), name)
         elif executor.action_catalog is not None and executor.action_catalog.get(name) is not None:
-            # Exact registered action name -> run it directly.
             result = await executor.run_action("action", name)
         elif executor.recipe_catalog is not None and executor.recipe_catalog.get(name) is not None:
-            # Exact saved recipe id (e.g. resolved kind="recipe") -> run the recipe.
             result = await executor.run_action("recipe", name)
         else:
-            # Otherwise treat the input as user text and resolve a trigger.
             result = await executor.run_resolved_text(name)
         return result.to_mapping()
 

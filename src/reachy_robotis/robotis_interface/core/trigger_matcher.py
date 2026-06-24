@@ -1,13 +1,4 @@
-"""Match free conversation text to a registered trigger phrase.
-
-Ported from the reachy_manipulation reference (``manual_task/task_matcher.py``)
-so chat/voice resolution has the same feel: matching is token/word aware (no raw
-substring matching) so a short trigger like "hi" no longer fires inside an
-unrelated word such as "which", stopwords are ignored so "push the box" cannot
-match "which box is..." on "the"/"box" alone, and longer trigger phrases are
-preferred because they are more specific. The best-scoring candidate above
-``MATCH_THRESHOLD`` is returned deterministically.
-"""
+"""Match free conversation text to a registered trigger phrase."""
 
 from __future__ import annotations
 
@@ -16,12 +7,8 @@ import difflib
 from dataclasses import dataclass
 
 
-# Minimum confidence required to trigger an action from free text. Kept low
-# enough to catch loosely-phrased requests ("do the omx moveit") while the model
-# only calls the resolver when the user actually asks to control a robot.
 MATCH_THRESHOLD = 0.5
 
-# Filler words that must not, on their own, count as a phrase match.
 _STOPWORDS = frozenset(
     {
         "a", "an", "the", "to", "on", "of", "in", "it", "is", "are", "this",
@@ -50,12 +37,7 @@ class TriggerMatch:
 
 
 def best_trigger_match(user_text: str, candidates: list[TriggerCandidate]) -> TriggerMatch | None:
-    """Return the best candidate for ``user_text`` or None below the threshold.
-
-    Candidates earlier in the list win on exact score ties (callers pass higher
-    priority catalogs first), and within a candidate the longest matching phrase
-    wins so more specific triggers are preferred.
-    """
+    """Return the best candidate for ``user_text`` or None below the threshold."""
     text = _norm(user_text)
     if not text:
         return None
@@ -97,19 +79,14 @@ def _phrase_score(
         return 1.0
     phrase_tokens = phrase.split()
     if _contains_tokens(text_tokens, phrase_tokens):
-        # Whole-phrase match on word boundaries; longer phrases are more specific.
         if len(phrase_tokens) == 1:
             return 0.8
         return min(0.97, 0.85 + 0.03 * len(phrase_tokens))
-    # Partial match: how much of the phrase's informative (non-stopword) words
-    # are present, blended with overall string similarity.
     content = [token for token in phrase_tokens if token not in _STOPWORDS] or phrase_tokens
     coverage = sum(1 for token in content if token in text_token_set) / len(content)
     ratio = difflib.SequenceMatcher(None, phrase, text).ratio()
     if len(phrase_tokens) >= 2 and len(content) >= 2 and coverage >= 0.5:
         return min(0.86, 0.45 + 0.4 * coverage + 0.1 * ratio)
-    # A single distinctive content word present (e.g. "moveit", "bringup") is a
-    # decent signal on its own.
     if len(content) == 1 and content[0] in text_token_set and len(content[0]) >= 4:
         return 0.6
     if ratio >= 0.75:

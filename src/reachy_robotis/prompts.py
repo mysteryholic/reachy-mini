@@ -15,18 +15,7 @@ VOICE_FILENAME = "voice.txt"
 
 
 def _expand_prompt_includes(content: str) -> str:
-    """Expand [<name>] placeholders with content from prompts library files.
-
-    Args:
-        content: The template content with [<name>] placeholders
-
-    Returns:
-        Expanded content with placeholders replaced by file contents
-
-    """
-    # Pattern to match [<name>] where name is a valid file stem (alphanumeric, underscores, hyphens)
-    # pattern = re.compile(r'^\[([a-zA-Z0-9_-]+)\]$')
-    # Allow slashes for subdirectories
+    """Expand [<name>] placeholders with content from prompts library files."""
     pattern = re.compile(r'^\[([a-zA-Z0-9/_-]+)\]$')
 
     lines = content.split('\n')
@@ -37,7 +26,6 @@ def _expand_prompt_includes(content: str) -> str:
         match = pattern.match(stripped)
 
         if match:
-            # Extract the name from [<name>]
             template_name = match.group(1)
             template_file = PROMPTS_LIBRARY_DIRECTORY / f"{template_name}.txt"
 
@@ -79,7 +67,6 @@ def get_session_instructions() -> str:
         if instructions_file.exists():
             instructions = instructions_file.read_text(encoding="utf-8").strip()
             if instructions:
-                # Expand [<name>] placeholders with content from prompts library
                 expanded_instructions = _expand_prompt_includes(instructions)
                 return expanded_instructions
             logger.error(f"Profile '{profile}' has empty {INSTRUCTIONS_FILENAME}")
@@ -92,11 +79,7 @@ def get_session_instructions() -> str:
 
 
 def get_session_voice(default: str = "cedar") -> str:
-    """Resolve the voice to use for the session.
-
-    If a custom profile is selected and contains a voice.txt, return its
-    trimmed content; otherwise return the provided default ("cedar").
-    """
+    """Resolve the voice to use for the session."""
     profile = config.REACHY_MINI_CUSTOM_PROFILE
     if not profile:
         return default

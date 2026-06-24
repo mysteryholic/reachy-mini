@@ -1,0 +1,44 @@
+{
+  "tasks": [
+    {
+      "name": "jarvis_intro",
+      "display_name": "Low Budget Jarvis Intro",
+      "triggers": ["Reachy ready", "get ready", "low budget Jarvis mode"],
+      "device": "mock",
+      "steps": [
+        {
+          "type": "say",
+          "params": {
+            "text": "Sure. Starting low-budget Jarvis mode."
+          }
+        },
+        {
+          "type": "wait",
+          "params": {
+            "duration": 0.2
+          }
+        }
+      ]
+    },
+    {
+      "name": "mock_full_demo_flow",
+      "display_name": "Mock Full Demo Flow",
+      "triggers": ["run full demo", "demo flow"],
+      "device": "mock",
+      "steps": [
+        {
+          "type": "say",
+          "params": {
+            "text": "Running the ROBOTIS demo flow in mock mode."
+          }
+        },
+        {
+          "type": "wait",
+          "params": {
+            "duration": 0.1
+          }
+        }
+      ]
+    }
+  ]
+}

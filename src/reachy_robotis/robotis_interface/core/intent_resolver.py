@@ -12,11 +12,7 @@ from reachy_robotis.robotis_interface.core.trigger_matcher import (
 
 
 class IntentResolver:
-    """Resolve user text to a registered action, task, or command.
-
-    ``action_catalog`` (robotis_actions.yaml) is the preferred source and is
-    checked first; task/command catalogs remain for backward compatibility.
-    """
+    """Resolve user text to a registered action, task, or command."""
 
     def __init__(
         self,
@@ -47,15 +43,8 @@ class IntentResolver:
         )
 
     def _candidates(self) -> list[TriggerCandidate]:
-        """Resolvable targets in priority order (earlier wins on score ties).
-
-        A trigger phrase plays the role of the reference project's task
-        ``aliases``; the display name is included as an implicit alias so a
-        natural request like "OMX MoveIt" still resolves without an exact
-        trigger sentence.
-        """
+        """Resolvable targets in priority order (earlier wins on score ties)."""
         candidates: list[TriggerCandidate] = []
-        # Action catalog first so registered actions win on equal matches.
         if self.action_catalog is not None:
             for action in self.action_catalog.list_actions():
                 candidates.append(TriggerCandidate("action", action.name, list(action.triggers)))
@@ -63,10 +52,6 @@ class IntentResolver:
             candidates.append(TriggerCandidate("task", task.name, list(task.triggers)))
         for command in self.command_catalog.list_commands():
             candidates.append(TriggerCandidate("command", command.name, list(command.triggers)))
-        # Recipe triggers last so a registered action (with explicit run.method)
-        # still wins, but recipes saved only in Command Recipe (no matching
-        # action) are still reachable by their trigger sentence. kind="recipe"
-        # is dispatched by ActionExecutor.run_action -> start_recipe(recipe_id).
         if self.recipe_catalog is not None:
             for recipe in self.recipe_catalog.list_recipes():
                 phrases = [*recipe.triggers, recipe.display_name]

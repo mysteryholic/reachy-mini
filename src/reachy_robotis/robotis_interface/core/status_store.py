@@ -32,12 +32,7 @@ class StatusStore:
         host: str = "",
         container: str = "",
     ) -> DeviceStatus:
-        """Seed a device's authoritative config-derived fields at startup.
-
-        Unlike :meth:`ensure_device`, this overwrites ``mode``/``host``/etc.
-        even if the device already exists, so config is always the source of
-        truth and the top-level ``devices`` snapshot cannot drift from config.
-        """
+        """Seed a device's authoritative config-derived fields at startup."""
         with self._lock:
             status = self.ensure_device(device, mode=mode, online=online)
             status.mode = mode

@@ -209,7 +209,6 @@ class ProductPresetCatalog:
             terminal.setdefault("wait_after_start_sec", 0)
             terminal.setdefault("required", True)
             normalized_terminals.append(terminal)
-        # Reuse the normal recipe parser for command/type/order/duplicate validation.
         CommandRecipe.from_mapping(
             workflow_id,
             {

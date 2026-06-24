@@ -1,9 +1,4 @@
-"""Background tool orchestrator for non-blocking tool execution.
-
-Allows tools to run long operations asynchronously while the robot
-continues conversing. Tools can be tracked, cancelled, and their
-completion is announced vocally via a silent notification queue.
-"""
+"""Background tool orchestrator for non-blocking tool execution."""
 
 from __future__ import annotations
 import time
@@ -52,7 +47,6 @@ class ToolCallRoutine(BaseModel):
     async def __call__(self, tool_manager: BackgroundToolManager) -> Any:
         """Execute the stored callable with its arguments."""
         if self.tool_name in _SYSTEM_TOOL_NAMES:
-            # For safety purposes, we only allow system tools to be called with the tool manager
             return await dispatch_tool_call_with_manager(tool_name=self.tool_name, args_json=self.args_json_str, deps=self.deps, tool_manager=tool_manager)
         return await dispatch_tool_call(tool_name=self.tool_name, args_json=self.args_json_str, deps=self.deps)
 
@@ -112,14 +106,7 @@ class BackgroundTool(ToolNotification):
 
 
 class BackgroundToolManager(BaseModel):
-    """Manages background tools for non-blocking tool execution.
-
-    Features:
-    - Start async tools without blocking the conversation
-    - Track tool status and progress
-    - Cancel running tools
-
-    """
+    """Manages background tools for non-blocking tool execution."""
 
     """the dictionary of tools"""
     _tools: Dict[str, BackgroundTool] = PrivateAttr(default_factory=dict)
@@ -143,12 +130,7 @@ class BackgroundToolManager(BaseModel):
         self,
         loop: Optional[asyncio.AbstractEventLoop] = None,
     ) -> None:
-        """Set the event loop.
-
-        Args:
-            loop: The event loop (defaults to current running loop)
-
-        """
+        """Set the event loop."""
         if loop is not None:
             self._loop = loop
         else:
@@ -166,18 +148,7 @@ class BackgroundToolManager(BaseModel):
         is_idle_tool_call: bool,
         with_progress: bool = False,
     ) -> BackgroundTool:
-        """Start a new background tool.
-
-        Args:
-            call_id: The ID of the tool
-            tool_call_routine: The ToolCallRoutine containing the callable and its arguments
-            with_progress: Whether to track progress (0.0-1.0)
-            is_idle_tool_call: Whether the tool call was triggered by an idle signal
-
-        Returns:
-            BackgroundTool object with tool ID
-
-        """
+        """Start a new background tool."""
         tool_name = tool_call_routine.tool_name
         id = call_id
         bg_tool = BackgroundTool(
@@ -232,23 +203,12 @@ class BackgroundToolManager(BaseModel):
         progress: float,
         message: Optional[str] = None,
     ) -> bool:
-        """Update progress for a tool (for tools with with_progress=True).
-
-        Args:
-            tool_id: The tool ID
-            progress: Progress value between 0.0 and 1.0
-            message: Optional progress message (e.g., "50% downloaded")
-
-        Returns:
-            True if updated successfully, False if tool not found or not tracking progress
-
-        """
+        """Update progress for a tool (for tools with with_progress=True)."""
         tool = self._tools.get(tool_id)
         if tool is None:
             return False
 
         if tool.progress is None:
-            # Tool not tracking progress
             return False
 
         tool.progress = ToolProgress(progress=max(0.0, min(1.0, progress)), message=message)
@@ -256,16 +216,7 @@ class BackgroundToolManager(BaseModel):
         return True
 
     async def cancel_tool(self, tool_id: str, log: bool = True) -> bool:
-        """Cancel a running tool by ID.
-
-        Args:
-            tool_id: The tool ID to cancel
-            log: Whether to log the cancellation
-
-        Returns:
-            True if cancelled, False if tool not found or not running
-
-        """
+        """Cancel a running tool by ID."""
         tool = self._tools.get(tool_id)
         if tool is None:
             if log:
@@ -286,16 +237,7 @@ class BackgroundToolManager(BaseModel):
         return False
 
     def start_up(self, tool_callbacks: list[Callable[[ToolNotification], Coroutine[Any, Any, None]]]) -> None:
-        """Start the background tool manager.
-
-        This method starts two concurrent tasks:
-        - _listener: Listens for completed BackgroundTool notifications and calls the callbacks.
-        - _cleanup: Cleans up completed/failed/cancelled tools that have been in memory for too long and times out tools that have been running too long.
-
-        Args:
-            tool_callbacks: A list of async or sync callables that receive the completed BackgroundTool notifications.
-
-        """
+        """Start the background tool manager."""
         self.set_loop()
 
         async def _listener() -> None:
@@ -339,12 +281,7 @@ class BackgroundToolManager(BaseModel):
         logger.info("BackgroundToolManager shut down")
 
     async def timeout_tools(self) -> int:
-        """Cancel tools that have been running too long.
-
-        Returns:
-            Number of tools cancelled
-
-        """
+        """Cancel tools that have been running too long."""
         now = time.monotonic()
         to_cancel = []
 
@@ -362,12 +299,7 @@ class BackgroundToolManager(BaseModel):
         return len(to_cancel)
 
     async def cleanup_tools(self) -> int:
-        """Remove completed/failed/cancelled tools that have been in memory for too long.
-
-        Returns:
-            Number of tools removed
-
-        """
+        """Remove completed/failed/cancelled tools that have been in memory for too long."""
         now = time.monotonic()
         to_remove = []
 
@@ -393,15 +325,7 @@ class BackgroundToolManager(BaseModel):
         return [t for t in self._tools.values() if t.status == ToolState.RUNNING]
 
     def get_all_tools(self, limit: Optional[int] = None) -> list[BackgroundTool]:
-        """Get recent tools (most recent first).
-
-        Args:
-            limit: Maximum number of tools to return (None means all)
-
-        Returns:
-            List of tools sorted by start time (most recent first)
-
-        """
+        """Get recent tools (most recent first)."""
         sorted_tools = sorted(
             self._tools.values(),
             key=lambda t: t.started_at,

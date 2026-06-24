@@ -1,14 +1,4 @@
-"""Lightweight COCO object detector for the camera visualization panel.
-
-Wraps an ultralytics YOLO model (COCO-pretrained) so the ``7. Camera
-Visualization`` panel can draw detection boxes over the live camera frame.
-
-The whole module degrades gracefully: if the ``yolo_vision`` extra
-(``ultralytics``) is not installed, or the model weights cannot be downloaded
-(e.g. offline / no disk), :class:`ObjectDetector` reports itself unavailable and
-the panel still shows the raw camera frame with a clear status message instead
-of crashing.
-"""
+"""Lightweight COCO object detector for the camera visualization panel."""
 
 from __future__ import annotations
 
@@ -22,8 +12,6 @@ from numpy.typing import NDArray
 logger = logging.getLogger(__name__)
 
 
-# Deterministic per-class colours (BGR) so the same object keeps the same box
-# colour across frames without shipping a palette.
 def _color_for_class(class_id: int) -> tuple[int, int, int]:
     rng = (class_id * 2654435761) & 0xFFFFFFFF
     return (int(rng & 0xFF), int((rng >> 8) & 0xFF), int((rng >> 16) & 0xFF))
@@ -44,7 +32,6 @@ class ObjectDetector:
 
         self._model: Any = None
         self._lock = threading.Lock()
-        # None = not attempted yet, True/False = outcome of the load attempt.
         self._available: Optional[bool] = None
         self._error: Optional[str] = None
 
@@ -86,11 +73,7 @@ class ObjectDetector:
         return self._error
 
     def detect(self, frame_bgr: NDArray[np.uint8]) -> List[Dict[str, Any]]:
-        """Run detection on a BGR frame.
-
-        Returns a list of ``{label, confidence, bbox:[x1,y1,x2,y2], class_id}``.
-        Returns an empty list (never raises) when detection is unavailable.
-        """
+        """Run detection on a BGR frame."""
         if not self._ensure_model():
             return []
 

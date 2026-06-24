@@ -56,10 +56,6 @@ class RobotAdapter(abc.ABC):
         )
 
     async def probe(self) -> dict:
-        """Refresh live connectivity for this device.
-
-        Default is a no-op that reports the currently stored snapshot. Remote
-        adapters override this to run a real check (SSH/Docker, HTTP bridge).
-        """
+        """Refresh live connectivity for this device."""
         return {"ok": True, "device": self.device, "checked": False}
 

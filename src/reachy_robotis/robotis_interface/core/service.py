@@ -21,17 +21,11 @@ from reachy_robotis.robotis_interface.core.terminal_session_manager import Termi
 
 _EXECUTOR: ActionExecutor | None = None
 
-# Modes that are available immediately without a remote check.
 _LOCAL_MODES = {"mock", "conversation"}
 
 
 def _seed_device_status(status_store: StatusStore, device: str, config: dict) -> None:
-    """Seed authoritative, config-derived status for one device.
-
-    Remote devices (ssh_docker/ssh/bridge) start ``online=False`` with
-    ``connection_status="not_checked"`` because no real connectivity test has
-    run yet. Local modes (mock/conversation) are considered online.
-    """
+    """Seed authoritative, config-derived status for one device."""
     mode = str(config.get("mode") or "mock")
     enabled = bool(config.get("enabled", True))
     host = str(config.get("host") or config.get("bridge_host") or "")
@@ -42,7 +36,6 @@ def _seed_device_status(status_store: StatusStore, device: str, config: dict) ->
         connection_status = "online" if enabled else "offline"
         configured = True
     else:
-        # Remote transports require a real check before claiming online.
         online = False
         connection_status = "not_checked"
         if mode == "bridge":
@@ -81,9 +74,6 @@ def get_robotis_executor() -> ActionExecutor:
     terminal_session_manager = TerminalSessionManager(recipe_catalog, connection_registry)
     resolver = IntentResolver(task_catalog, command_catalog, action_catalog, recipe_catalog)
 
-    # Seed device status from config FIRST so config is the single source of
-    # truth. Adapters created afterwards only refine online/connection_status
-    # via real checks; they never invent a different mode/host than config.
     for device, config in registry.list_devices().items():
         _seed_device_status(status_store, device, config)
 

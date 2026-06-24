@@ -22,7 +22,6 @@ class HeadTracking(Tool):
         """Enable or disable head tracking."""
         enable = bool(kwargs.get("start"))
 
-        # Update camera worker head tracking state
         if deps.camera_worker is not None:
             deps.camera_worker.set_head_tracking_enabled(enable)
 

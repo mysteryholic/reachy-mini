@@ -52,7 +52,6 @@ class TaskCancel(Tool):
         if not tool:
             return {"error": f"Tool {tool_id} not found."}
 
-        # Check if tool is still running
         if tool.status != ToolState.RUNNING:
             return {
                 "status": f"{tool.status.value}",
@@ -60,7 +59,6 @@ class TaskCancel(Tool):
                 "tool_id": tool_id,
             }
 
-        # Cancel the tool
         if await tool_manager.cancel_tool(tool_id):
             return {
                 "status": "cancelled",

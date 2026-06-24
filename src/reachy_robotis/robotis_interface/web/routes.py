@@ -33,9 +33,6 @@ def create_robotis_router(
     device_registry = DeviceRegistry()
     product_presets = ProductPresetCatalog()
 
-    # Camera Visualization (section 7): latest detections are cached so the
-    # snapshot endpoint runs inference once per frame and the detections list
-    # endpoint reuses that result instead of doing a second pass.
     _camera_state: dict[str, Any] = {"detections": [], "ts": 0.0}
 
     def _app_mode() -> str:
@@ -100,9 +97,6 @@ def create_robotis_router(
         return f"{device} adapter"
 
     def _devices_payload() -> list[dict[str, Any]]:
-        # The status store is the single source of truth for mode/host/container/
-        # online/connection_status. Config only supplies static descriptors
-        # (transport label, user, ROS setup paths, command keys, flow text).
         statuses = robotis_executor.status()
         devices = []
         for device, device_config in device_registry.list_devices().items():
@@ -211,13 +205,7 @@ def create_robotis_router(
         }
 
     async def _refresh_device_statuses() -> None:
-        """Probe cheap live connectivity (OMX HTTP bridge) for hot endpoints.
-
-        Only OMX is probed here because its HTTP bridge check is fast and its
-        online state drives the dashboard. SSH devices (omy/ai_worker) are
-        intentionally left ``not_checked`` until the user runs an explicit
-        connection test, so we never block /status or /health on a 5s SSH dial.
-        """
+        """Probe cheap live connectivity (OMX HTTP bridge) for hot endpoints."""
         adapter = robotis_executor.adapters.get("omx")
         if adapter is None:
             return
@@ -256,7 +244,6 @@ def create_robotis_router(
             mode = str(status.get("mode") or "mock")
             if device_id == "omx":
                 return "online" if status.get("online") else "offline"
-            # Remote ros2 devices: report configured transport mode.
             return mode
 
         return {
@@ -510,7 +497,6 @@ def create_robotis_router(
         result = (await robotis_executor.cancel_active_action(str(device) if device else None)).to_mapping()
         return result
 
-    # ---- Generic CLI command interface (Connection Profile driven) ----
     @router.get("/connections")
     async def list_connections() -> dict[str, Any]:
         """List connection profiles (no secrets)."""
@@ -879,7 +865,6 @@ def create_robotis_router(
         except WebSocketDisconnect:
             return
 
-    # ----- Section 7: Camera Visualization (live feed + object detection) -----
 
     def _run_detection(frame: Any) -> list[dict[str, Any]]:
         """Detect objects on a frame and cache the result for the list view."""

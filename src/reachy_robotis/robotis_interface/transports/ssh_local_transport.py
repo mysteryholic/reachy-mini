@@ -23,17 +23,7 @@ class SSHLocalTransport:
         working_directory: str = "/root",
         timeout_s: float = 30.0,
     ) -> None:
-        """
-        Initialize SSH local transport.
-
-        Args:
-            device_id: Device identifier
-            host: SSH host address
-            user: SSH username
-            ros_setup_paths: List of ROS 2 setup scripts to source
-            working_directory: Working directory on remote
-            timeout_s: Command timeout in seconds
-        """
+        """Initialize SSH local transport."""
         self.device_id = device_id
         self.host = host
         self.user = user
@@ -44,16 +34,13 @@ class SSHLocalTransport:
 
     def _build_command(self, cmd: str) -> str:
         """Build full SSH + ROS 2 setup command."""
-        # Build ROS 2 setup string
         setup_commands = ""
         if self.ros_setup_paths:
             setup_list = [f"source {path}" for path in self.ros_setup_paths]
             setup_commands = " && ".join(setup_list) + " && "
 
-        # Full command with bash
         full_cmd = f"{setup_commands}cd {self.working_directory} && {cmd}"
 
-        # SSH wrapper
         ssh_cmd = f"ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 {self.user}@{self.host} '{full_cmd}'"
 
         return ssh_cmd
@@ -64,17 +51,7 @@ class SSHLocalTransport:
         run_mode: str = "foreground",
         capture_output: bool = True,
     ) -> dict[str, Any]:
-        """
-        Execute command in remote local shell.
-
-        Args:
-            command: Command to execute
-            run_mode: 'foreground' or 'detached'
-            capture_output: Whether to capture stdout/stderr
-
-        Returns:
-            Result dictionary with ok, message, output, error
-        """
+        """Execute command in remote local shell."""
         try:
             ssh_cmd = self._build_command(command)
 
@@ -82,7 +59,6 @@ class SSHLocalTransport:
             logger.debug(f"[{self.device_id}] Full SSH command: {ssh_cmd}")
 
             if run_mode == "detached":
-                # Start in background, don't wait
                 subprocess.Popen(
                     ssh_cmd,
                     shell=True,
@@ -96,7 +72,6 @@ class SSHLocalTransport:
                     "error": "",
                 }
 
-            # Foreground: wait for completion
             result = subprocess.run(
                 ssh_cmd,
                 shell=True,
@@ -148,16 +123,7 @@ class SSHLocalTransport:
         command: str,
         run_mode: str = "foreground",
     ) -> ActionResult:
-        """
-        Async wrapper for run_command.
-
-        Args:
-            command: Command to execute
-            run_mode: 'foreground' or 'detached'
-
-        Returns:
-            ActionResult
-        """
+        """Async wrapper for run_command."""
         import asyncio
 
         result = await asyncio.to_thread(

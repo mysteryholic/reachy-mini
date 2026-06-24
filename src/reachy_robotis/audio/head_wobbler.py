@@ -16,7 +16,7 @@ from reachy_robotis.audio.speech_tapper import HOP_MS, SwayRollRT
 
 
 SAMPLE_RATE = 24000
-MOVEMENT_LATENCY_S = 0.2  # seconds between audio and robot movement
+MOVEMENT_LATENCY_S = 0.2
 logger = logging.getLogger(__name__)
 
 
@@ -35,7 +35,6 @@ class HeadWobbler:
         self.audio_queue: "queue.Queue[Tuple[int, int, NDArray[np.int16]]]" = queue.Queue()
         self.sway = SwayRollRT()
 
-        # Synchronization primitives
         self._state_lock = threading.Lock()
         self._sway_lock = threading.Lock()
         self._generation = 0
@@ -74,9 +73,8 @@ class HeadWobbler:
         while not self._stop_event.is_set():
             queue_ref = self.audio_queue
             try:
-                chunk_generation, sr, chunk = queue_ref.get_nowait()  # (gen, sr, data)
+                chunk_generation, sr, chunk = queue_ref.get_nowait()
             except queue.Empty:
-                # avoid while to never exit
                 time.sleep(MOVEMENT_LATENCY_S)
                 continue
 
@@ -171,7 +169,6 @@ class HeadWobbler:
             self._base_ts = None
             self._hops_done = 0
 
-        # Drain any queued audio chunks from previous generations
         drained_any = False
         while True:
             try:

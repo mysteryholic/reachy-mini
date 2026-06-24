@@ -122,18 +122,12 @@ class IntentMatch:
 
 @dataclass
 class DeviceStatus:
-    """Small status snapshot for UI and tools.
-
-    This is the single source of truth for device state. ``mode``, ``host``,
-    ``container`` and ``configured`` are seeded from config at startup;
-    ``online``/``connection_status`` only become positive after a real check.
-    """
+    """Small status snapshot for UI and tools."""
 
     device: str
     online: bool = False
     mode: str = "mock"
     configured: bool = False
-    # not_checked | checking | online | offline | error
     connection_status: str = "not_checked"
     host: str = ""
     container: str = ""

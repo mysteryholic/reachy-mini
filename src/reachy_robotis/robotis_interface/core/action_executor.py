@@ -47,7 +47,6 @@ class ActionExecutor:
         self.action_catalog = action_catalog
         self.recipe_catalog = recipe_catalog
         self.terminal_session_manager = terminal_session_manager
-        # Last generic CLI command outcome per device (for /logs and UI).
         self._last_command: dict[str, dict[str, Any]] = {}
         self._stop_lock = asyncio.Lock()
         self._connected = False
@@ -94,12 +93,7 @@ class ActionExecutor:
         return resolved
 
     async def run_resolved_text(self, text: str) -> ActionResult:
-        """Resolve a spoken/typed phrase to a trigger and run it in one shot.
-
-        Mirrors the reachy_manipulation reference feel: the conversation passes
-        the raw utterance, the matcher picks the best trigger, it runs, and a
-        friendly ``reply`` (plus the matched trigger) comes back for the model.
-        """
+        """Resolve a spoken/typed phrase to a trigger and run it in one shot."""
         resolved = self.resolve(text)
         if not resolved.get("ok") or resolved.get("kind") is None or resolved.get("name") is None:
             message = f"No registered action matched the phrase '{text}'."
@@ -240,11 +234,7 @@ class ActionExecutor:
         )
 
     async def run_device_command(self, device: str, command_key: str) -> ActionResult:
-        """Run one allowlisted command_key on a device via its ConnectionProfile.
-
-        The command string is taken ONLY from config (command_spec); no
-        free-form shell is ever accepted here.
-        """
+        """Run one allowlisted command_key on a device via its ConnectionProfile."""
         if self.registry is None or self.connection_registry is None:
             return ActionResult(ok=False, error="generic_cli_unavailable", message="The generic CLI interface is not configured.")
         spec = self.registry.command_spec(device, command_key)
@@ -293,13 +283,7 @@ class ActionExecutor:
         return dict(self._last_command.get(device, {}))
 
     def _stop_targets(self, device: str | None) -> list[str]:
-        """Pick which devices a stop should touch.
-
-        An explicit ``device`` always targets exactly that device. A global stop
-        (``device is None``) only touches devices that are online or currently
-        busy, so an idle/offline remote robot (e.g. an unplugged OMY) is never
-        reached with a pkill SSH and unrelated machines are left alone.
-        """
+        """Pick which devices a stop should touch."""
         if device is not None:
             return [device] if device in self.adapters else []
         statuses = self.status_store.snapshot()
@@ -359,7 +343,6 @@ class ActionExecutor:
         """Disconnect from robot (disable all adapters and stop motors)."""
         self._connected = False
         self._ui_state["connected"] = False
-        # Stop all devices before disconnecting
         async with self._stop_lock:
             results = [await adapter.stop() for adapter in self.adapters.values()]
         ok = all(result.ok for result in results)

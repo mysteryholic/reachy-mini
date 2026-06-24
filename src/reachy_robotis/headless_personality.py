@@ -1,11 +1,4 @@
-"""Headless personality management (console-based).
-
-Provides an interactive CLI to browse, preview, apply, create and edit
-"personalities" (profiles) when running without Gradio.
-
-This module is intentionally not shared with the Gradio implementation to
-avoid coupling and keep responsibilities clear for headless mode.
-"""
+"""Headless personality management (console-based)."""
 
 from __future__ import annotations
 from typing import List

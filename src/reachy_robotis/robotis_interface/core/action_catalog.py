@@ -8,8 +8,6 @@ from reachy_robotis.robotis_interface.core.paths import project_path
 from reachy_robotis.robotis_interface.core.yaml_loader import load_mapping
 
 
-# Action kinds the catalog understands. They all resolve to an allowlisted
-# operation; an LLM only ever selects an action name, never a shell command.
 VALID_KINDS = {"recipe", "cli_command", "stop", "manual_task", "teleop_mode", "status", "mode"}
 
 

@@ -8,7 +8,6 @@ import numpy as np
 from numpy.typing import NDArray
 
 
-# Tunables
 SR = 16_000
 FRAME_MS = 20
 HOP_MS = 50
@@ -40,7 +39,6 @@ LOUDNESS_GAMMA = 0.9
 SWAY_ATTACK_MS = 50
 SWAY_RELEASE_MS = 250
 
-# Derived
 FRAME = int(SR * FRAME_MS / 1000)
 HOP = int(SR * HOP_MS / 1000)
 ATTACK_FR = max(1, int(VAD_ATTACK_MS / HOP_MS))
@@ -51,7 +49,6 @@ SWAY_RELEASE_FR = max(1, int(SWAY_RELEASE_MS / HOP_MS))
 
 def _rms_dbfs(x: NDArray[np.float32]) -> float:
     """Root-mean-square in dBFS for float32 mono array in [-1,1]."""
-    # numerically stable rms (avoid overflow)
     x = x.astype(np.float32, copy=False)
     rms = np.sqrt(np.mean(x * x, dtype=np.float32) + 1e-12, dtype=np.float32)
     return float(20.0 * math.log10(float(rms) + 1e-12))
@@ -68,17 +65,12 @@ def _loudness_gain(db: float, offset: float = SENS_DB_OFFSET) -> float:
 
 
 def _to_float32_mono(x: NDArray[Any]) -> NDArray[np.float32]:
-    """Convert arbitrary PCM array to float32 mono in [-1,1].
-
-    Accepts shapes: (N,), (1,N), (N,1), (C,N), (N,C).
-    """
+    """Convert arbitrary PCM array to float32 mono in [-1,1]."""
     a = np.asarray(x)
     if a.ndim == 0:
         return np.zeros(0, dtype=np.float32)
 
-    # If 2D, decide which axis is channels (prefer small first dim)
     if a.ndim == 2:
-        # e.g., (channels, samples) if channels is small (<=8)
         if a.shape[0] <= 8 and a.shape[0] <= a.shape[1]:
             a = np.mean(a, axis=0)
         else:
@@ -86,10 +78,8 @@ def _to_float32_mono(x: NDArray[Any]) -> NDArray[np.float32]:
     elif a.ndim > 2:
         a = np.mean(a.reshape(a.shape[0], -1), axis=0)
 
-    # Now 1D, cast/scale
     if np.issubdtype(a.dtype, np.floating):
         return a.astype(np.float32, copy=False)
-    # integer PCM
     info = np.iinfo(a.dtype)
     scale = float(max(-info.min, info.max))
     return a.astype(np.float32) / (scale if scale != 0.0 else 1.0)
@@ -99,7 +89,6 @@ def _resample_linear(x: NDArray[np.float32], sr_in: int, sr_out: int) -> NDArray
     """Lightweight linear resampler for short buffers."""
     if sr_in == sr_out or x.size == 0:
         return x
-    # guard tiny sizes
     n_out = int(round(x.size * sr_out / sr_in))
     if n_out <= 1:
         return np.zeros(0, dtype=np.float32)
@@ -109,17 +98,12 @@ def _resample_linear(x: NDArray[np.float32], sr_in: int, sr_out: int) -> NDArray
 
 
 class SwayRollRT:
-    """Feed audio chunks → per-hop sway outputs.
-
-    Usage:
-        rt = SwayRollRT()
-        rt.feed(pcm_int16_or_float, sr) -> List[dict]
-    """
+    """Feed audio chunks → per-hop sway outputs."""
 
     def __init__(self, rng_seed: int = 7):
         """Initialize state."""
         self._seed = int(rng_seed)
-        self.samples: deque[float] = deque(maxlen=10 * SR)  # sliding window for VAD/env
+        self.samples: deque[float] = deque(maxlen=10 * SR)
         self.carry: NDArray[np.float32] = np.zeros(0, dtype=np.float32)
 
         self.vad_on = False
@@ -152,13 +136,7 @@ class SwayRollRT:
         self.t = 0.0
 
     def feed(self, pcm: NDArray[Any], sr: int | None) -> List[Dict[str, float]]:
-        """Stream in PCM chunk. Returns a list of sway dicts, one per hop (HOP_MS).
-
-        Args:
-            pcm: np.ndarray, shape (N,) or (C,N)/(N,C); int or float.
-            sr:  sample rate of `pcm` (None -> assume SR).
-
-        """
+        """Stream in PCM chunk. Returns a list of sway dicts, one per hop (HOP_MS)."""
         sr_in = SR if sr is None else int(sr)
         x = _to_float32_mono(pcm)
         if x.size == 0:
@@ -168,7 +146,6 @@ class SwayRollRT:
             if x.size == 0:
                 return []
 
-        # append to carry and consume fixed HOP chunks
         if self.carry.size:
             self.carry = np.concatenate([self.carry, x])
         else:
@@ -181,8 +158,6 @@ class SwayRollRT:
             remaining: NDArray[np.float32] = self.carry[HOP:]
             self.carry = remaining
 
-            # keep sliding window for VAD/env computation
-            # (deque accepts any iterable; list() for small HOP is fine)
             self.samples.extend(hop.tolist())
             if len(self.samples) < FRAME:
                 self.t += HOP_MS / 1000.0
@@ -195,7 +170,6 @@ class SwayRollRT:
             )
             db = _rms_dbfs(frame)
 
-            # VAD with hysteresis + attack/release
             if db >= VAD_DB_ON:
                 self.vad_above += 1
                 self.vad_below = 0
@@ -218,7 +192,6 @@ class SwayRollRT:
             down = 1.0 - (self.sway_down / SWAY_RELEASE_FR)
             target = up if self.vad_on else down
             self.sway_env += ENV_FOLLOW_GAIN * (target - self.sway_env)
-            # clamp
             if self.sway_env < 0.0:
                 self.sway_env = 0.0
             elif self.sway_env > 1.0:
@@ -228,7 +201,6 @@ class SwayRollRT:
             env = self.sway_env
             self.t += HOP_MS / 1000.0
 
-            # oscillators
             pitch = (
                 math.radians(SWAY_A_PITCH_DEG)
                 * loud

@@ -20,7 +20,6 @@ class CLITransport:
         self.status_store = status_store
         self._process: Process | None = None
         self._active_command: str | None = None
-        # Last execution outcome for the UI (return code + log preview).
         self.last_return_code: int | None = None
         self.last_return_meaning: str = ""
         self.last_stdout_tail: str = ""
@@ -202,7 +201,6 @@ class CLITransport:
         rc = process.returncode
         meaning = describe_return_code(rc)
 
-        # Record last outcome for the UI log preview.
         self.last_return_code = rc
         self.last_return_meaning = meaning
         self.last_stdout_tail = tail_lines(stdout_text, 50)

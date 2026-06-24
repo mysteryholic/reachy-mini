@@ -1,0 +1,43 @@
+{
+  "tasks": [
+    {
+      "name": "push_box_custom",
+      "display_name": "Push Box Custom",
+      "triggers": ["push the box", "clear the box", "move the box away", "pick up that box"],
+      "device": "omx",
+      "steps": [
+        {
+          "type": "move_l",
+          "params": {
+            "x": 0.18,
+            "y": 0.10,
+            "z": 0.18,
+            "duration": 0.5
+          }
+        },
+        {
+          "type": "gripper",
+          "params": {
+            "command": "close"
+          }
+        },
+        {
+          "type": "move_l",
+          "params": {
+            "x": 0.24,
+            "y": 0.10,
+            "z": 0.18,
+            "duration": 0.5
+          }
+        },
+        {
+          "type": "gripper",
+          "params": {
+            "command": "open"
+          }
+        }
+      ]
+    }
+  ]
+}
+

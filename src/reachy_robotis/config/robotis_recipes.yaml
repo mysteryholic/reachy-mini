@@ -1,0 +1,142 @@
+{
+  "recipes": {
+    "omx_play_demo_bag": {
+      "display_name": "OMX Demo Rosbag",
+      "device": "omx",
+      "description": "Play a pre-recorded OMX rosbag created manually by the user.",
+      "triggers": [
+        "play OMX demo",
+        "play OMX rosbag"
+      ],
+      "terminals": [
+        {
+          "terminal_id": "omx_demo_bag",
+          "display_name": "OMX Demo Rosbag",
+          "connection_id": "omx_pc",
+          "command_type": "container",
+          "command": "ros2 bag play /workspace/bags/omx_demo_motion",
+          "run_mode": "detached",
+          "start_order": 1,
+          "wait_after_start_sec": 0.0,
+          "stop_command": "pkill -TERM -f 'ros2 bag play /workspace/bags/omx_demo_motion' || true",
+          "required": true
+        }
+      ]
+    },
+    "omy_play_demo_bag": {
+      "display_name": "OMY Demo Rosbag",
+      "device": "omy",
+      "description": "Play a pre-recorded OMY rosbag created manually by the user.",
+      "triggers": [
+        "play OMY demo",
+        "play OMY rosbag"
+      ],
+      "terminals": [
+        {
+          "terminal_id": "omy_demo_bag",
+          "display_name": "OMY Demo Rosbag",
+          "connection_id": "omy_raspberry_pi",
+          "command_type": "container",
+          "command": "ros2 bag play /home/pollen/bags/omy_demo_wave",
+          "run_mode": "detached",
+          "start_order": 1,
+          "wait_after_start_sec": 0.0,
+          "stop_command": "pkill -TERM -f 'ros2 bag play /home/pollen/bags/omy_demo_wave' || true",
+          "required": true
+        }
+      ]
+    },
+    "ai_worker_bringup": {
+      "display_name": "AI Worker Bringup",
+      "device": "ai_worker",
+      "description": "Start the AI Worker bringup command.",
+      "triggers": [
+        "start AI Worker",
+        "bring up AI Worker"
+      ],
+      "terminals": [
+        {
+          "terminal_id": "ai_worker_bringup",
+          "display_name": "AI Worker Bringup",
+          "connection_id": "ai_worker_jetson",
+          "command_type": "container",
+          "command": "ros2 launch ffw_bringup ffw_bg2_ai.launch.py",
+          "run_mode": "detached",
+          "start_order": 1,
+          "wait_after_start_sec": 0.0,
+          "stop_command": "pkill -TERM -f 'ffw_|ffw_bringup|ros2 launch' || true",
+          "required": true
+        }
+      ]
+    },
+    "ai_worker_demo_command": {
+      "display_name": "AI Worker Demo Command",
+      "device": "ai_worker",
+      "description": "Run the AI Worker demo rosbag command.",
+      "triggers": [
+        "play AI Worker demo",
+        "run AI Worker demo"
+      ],
+      "terminals": [
+        {
+          "terminal_id": "ai_worker_demo_bag",
+          "display_name": "AI Worker Demo Rosbag",
+          "connection_id": "ai_worker_jetson",
+          "command_type": "container",
+          "command": "ros2 bag play /workspace/bags/ai_worker_demo_motion",
+          "run_mode": "detached",
+          "start_order": 1,
+          "wait_after_start_sec": 0.0,
+          "stop_command": "pkill -TERM -f 'ros2 bag play /workspace/bags/ai_worker_demo_motion' || true",
+          "required": true
+        }
+      ]
+    },
+    "omy_bringup": {
+      "display_name": "OMY Bringup",
+      "device": "omy",
+      "description": "Start OMY bringup in one terminal session.",
+      "triggers": [
+        "start OMY",
+        "bring up OMY"
+      ],
+      "terminals": [
+        {
+          "terminal_id": "omy_bringup",
+          "display_name": "OMY Bringup",
+          "connection_id": "omx_pc",
+          "command_type": "container",
+          "command": "ros2 launch open_manipulator_bringup omy_f3m.launch.py start_rviz:=true use_mock_hardware:=true",
+          "run_mode": "detached",
+          "start_order": 1,
+          "wait_after_start_sec": 0.0,
+          "stop_command": "pkill -TERM -f 'omy_f3m.launch.py|open_manipulator_bringup' || true",
+          "required": true
+        }
+      ]
+    },
+    "custom_omx_recipe": {
+      "display_name": "Custom OMX Recipe",
+      "device": "omx",
+      "description": "Run a custom multi-terminal robot CLI workflow.",
+      "triggers": [
+        "start OMX",
+        "start omx bring up"
+      ],
+      "terminals": [
+        {
+          "terminal_id": "omx_bringup_f",
+          "display_name": "OMX-F Bringup",
+          "connection_id": "omx_pc",
+          "command_type": "container",
+          "command": "ros2 launch open_manipulator_bringup omx_f.launch.py",
+          "run_mode": "detached",
+          "start_order": 1,
+          "wait_after_start_sec": 0.0,
+          "stop_command": "pkill -TERM -f 'omx_f.launch.py|open_manipulator_bringup' || true",
+          "required": true
+        }
+      ]
+    }
+  }
+}

@@ -4,10 +4,8 @@ from pathlib import Path
 
 
 PACKAGE_ROOT = Path(__file__).resolve().parents[2]
-PROJECT_ROOT = Path(__file__).resolve().parents[4]
 
 
 def project_path(*parts: str) -> Path:
-    """Return a path rooted at the app project directory."""
-    return PROJECT_ROOT.joinpath(*parts)
-
+    """Return a path to a bundled data file under the package root."""
+    return PACKAGE_ROOT.joinpath(*parts)

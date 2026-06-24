@@ -15,7 +15,6 @@ from dataclasses import dataclass
 from reachy_mini import ReachyMini
 from reachy_robotis.config import DEFAULT_PROFILES_DIRECTORY as DEFAULT_PROFILES_PATH  # noqa: F401
 
-# Import config to ensure .env is loaded before reading REACHY_MINI_CUSTOM_PROFILE
 from reachy_robotis.config import config  # noqa: F401
 from reachy_robotis.tools.tool_constants import SystemTool
 
@@ -43,14 +42,12 @@ ALL_TOOL_SPECS: List[Dict[str, Any]] = []
 _TOOLS_INITIALIZED = False
 
 
-
 def get_concrete_subclasses(base: type[Tool]) -> List[type[Tool]]:
     """Recursively find all concrete (non-abstract) subclasses of a base class."""
     result: List[type[Tool]] = []
     for cls in base.__subclasses__():
         if not inspect.isabstract(cls):
             result.append(cls)
-        # recurse into subclasses
         result.extend(get_concrete_subclasses(cls))
     return result
 
@@ -60,23 +57,15 @@ class ToolDependencies:
     """External dependencies injected into tools."""
 
     reachy_mini: ReachyMini
-    movement_manager: Any  # MovementManager from moves.py
-    # Optional deps
-    camera_worker: Any | None = None  # CameraWorker for frame buffering
+    movement_manager: Any
+    camera_worker: Any | None = None
     vision_manager: Any | None = None
-    head_wobbler: Any | None = None  # HeadWobbler for audio-reactive motion
+    head_wobbler: Any | None = None
     motion_duration_s: float = 1.0
 
 
-# Tool base class
 class Tool(abc.ABC):
-    """Base abstraction for tools used in function-calling.
-
-    Each tool must define:
-      - name: str
-      - description: str
-      - parameters_schema: Dict[str, Any]  # JSON Schema
-    """
+    """Base abstraction for tools used in function-calling."""
 
     name: str
     description: str
@@ -138,15 +127,11 @@ def _format_error(error: Exception) -> str:
     return f"{type(error).__name__}: {error}"
 
 
-# Registry & specs (dynamic)
 def _load_profile_tools() -> None:
     """Load tools based on profile's tools.txt file."""
-    # Determine which profile to use
     profile = config.REACHY_MINI_CUSTOM_PROFILE or "default"
     logger.info(f"Loading tools for profile: {profile}")
 
-    # Build path to tools.txt
-    # Get the profile directory path
     profile_module_path = config.PROFILES_DIRECTORY / profile
     tools_txt_path = profile_module_path / "tools.txt"
     default_tools_txt_path = Path(__file__).parent.parent / "profiles" / "default" / "tools.txt"
@@ -171,7 +156,6 @@ def _load_profile_tools() -> None:
             logger.error(f"✗ tools.txt not found at {tools_txt_path}")
             sys.exit(1)
 
-    # Read and parse tools.txt
     try:
         with open(tools_txt_path, "r") as f:
             lines = f.readlines()
@@ -179,16 +163,13 @@ def _load_profile_tools() -> None:
         logger.error(f"✗ Failed to read tools.txt: {e}")
         sys.exit(1)
 
-    # Parse tool names (skip comments and blank lines)
     tool_names = []
     for line in lines:
         line = line.strip()
-        # Skip blank lines and comments
         if not line or line.startswith("#"):
             continue
         tool_names.append(line)
 
-    # Add system tools
     tool_names.extend({tool.value for tool in SystemTool})
 
     logger.info(f"Found {len(tool_names)} tools to load: {tool_names}")
@@ -218,7 +199,6 @@ def _load_profile_tools() -> None:
         profile_error = None
         profile_import_path = f"{DEFAULT_PROFILES_MODULE}.{profile}.{tool_name}"
 
-        # Try profile tool first
         try:
             source = _try_load_tool(
                 tool_name,
@@ -241,7 +221,6 @@ def _load_profile_tools() -> None:
             logger.error(f"❌ Failed to load profile tool '{tool_name}': {profile_error}")
             logger.error(f"  Module path: {profile_import_path}")
 
-        # Try tools directory if not found in profile
         if not loaded:
             shared_module_path = f"reachy_robotis.tools.{tool_name}"
             try:
@@ -263,7 +242,6 @@ def _load_profile_tools() -> None:
             except Exception as e:
                 logger.error(f"❌ Failed to load shared tool '{tool_name}': {_format_error(e)}")
                 logger.error(f"  Module path: {shared_module_path}")
-
 
 
 def _initialize_tools() -> None:
@@ -293,7 +271,6 @@ def get_tool_specs(exclusion_list: list[str] = []) -> list[Dict[str, Any]]:
     return [spec for spec in ALL_TOOL_SPECS if spec.get("name") not in exclusion_list]
 
 
-# Dispatcher
 def _safe_load_obj(args_json: str) -> Dict[str, Any]:
     try:
         parsed_args = json.loads(args_json or "{}")

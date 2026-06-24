@@ -6,8 +6,6 @@ from pathlib import Path
 from dotenv import find_dotenv, load_dotenv
 
 
-# Locked profile: set to a profile name (e.g., "astronomer") to lock the app
-# to that profile and disable all profile switching. Leave as None for normal behavior.
 LOCKED_PROFILE: str | None = "_reachy_robotis_locked_profile"
 DEFAULT_PROFILES_DIRECTORY = Path(__file__).parent / "profiles"
 
@@ -15,11 +13,7 @@ logger = logging.getLogger(__name__)
 
 
 def _env_flag(name: str, default: bool = False) -> bool:
-    """Parse a boolean environment flag.
-
-    Accepted truthy values: 1, true, yes, on
-    Accepted falsy values: 0, false, no, off
-    """
+    """Parse a boolean environment flag."""
     raw = os.getenv(name)
     if raw is None:
         return default
@@ -73,7 +67,6 @@ def _raise_on_name_collisions(
     )
 
 
-# Validate LOCKED_PROFILE at startup
 if LOCKED_PROFILE is not None:
     _profiles_dir = DEFAULT_PROFILES_DIRECTORY
     _profile_path = _profiles_dir / LOCKED_PROFILE
@@ -85,21 +78,13 @@ if LOCKED_PROFILE is not None:
         print(f"Error: LOCKED_PROFILE '{LOCKED_PROFILE}' has no instructions.txt", file=sys.stderr)
         sys.exit(1)
 
-# Canonical .env location is the project root, NOT the package directory.
-# config.py lives at <project_root>/src/reachy_robotis/config.py, so parents[2]
-# is the project root.
 PROJECT_ROOT_DIR = Path(__file__).resolve().parents[2]
 PROJECT_ROOT_ENV_PATH = PROJECT_ROOT_DIR / ".env"
-# Legacy location that earlier builds wrote to by mistake. We migrate/ignore it.
 LEGACY_PACKAGE_ENV_PATH = Path(__file__).resolve().parent / ".env"
 
 
 def _migrate_legacy_env() -> None:
-    """Move a stray ``src/reachy_robotis/.env`` to the project root once.
-
-    Keys must never live under the package directory. If the project root
-    already has a ``.env`` we leave the legacy file alone (root wins) but warn.
-    """
+    """Move a stray ``src/reachy_robotis/.env`` to the project root once."""
     if not LEGACY_PACKAGE_ENV_PATH.exists():
         return
     if PROJECT_ROOT_ENV_PATH.exists():
@@ -119,7 +104,7 @@ def _migrate_legacy_env() -> None:
             LEGACY_PACKAGE_ENV_PATH,
             PROJECT_ROOT_ENV_PATH,
         )
-    except Exception as exc:  # best-effort; fall back to loading in place
+    except Exception as exc:
         logger.warning("Failed to migrate legacy package .env: %s", exc)
 
 
@@ -130,13 +115,10 @@ if _skip_dotenv:
 else:
     _migrate_legacy_env()
 
-    # Project root .env is authoritative. Fall back to an upward search only
-    # when the root file is absent (covers Reachy Mini Apps instance dirs).
     if PROJECT_ROOT_ENV_PATH.exists():
         load_dotenv(dotenv_path=str(PROJECT_ROOT_ENV_PATH), override=True)
         logger.info("Configuration loaded from %s", PROJECT_ROOT_ENV_PATH)
     elif LEGACY_PACKAGE_ENV_PATH.exists():
-        # Migration failed but a legacy file remains; load it so the app still runs.
         load_dotenv(dotenv_path=str(LEGACY_PACKAGE_ENV_PATH), override=True)
         logger.warning(
             "Loaded API config from legacy %s. Move it to %s.",
@@ -155,14 +137,12 @@ else:
 class Config:
     """Configuration class for the conversation app."""
 
-    # Required
-    OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")  # The key is downloaded in console.py if needed
+    OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
-    # Optional
     MODEL_NAME = os.getenv("MODEL_NAME", "gpt-realtime")
     HF_HOME = os.getenv("HF_HOME", "./cache")
     LOCAL_VISION_MODEL = os.getenv("LOCAL_VISION_MODEL", "HuggingFaceTB/SmolVLM2-2.2B-Instruct")
-    HF_TOKEN = os.getenv("HF_TOKEN")  # Optional, falls back to hf auth login if not set
+    HF_TOKEN = os.getenv("HF_TOKEN")
 
     logger.debug(f"Model: {MODEL_NAME}, HF_HOME: {HF_HOME}, Vision Model: {LOCAL_VISION_MODEL}")
 
@@ -245,19 +225,12 @@ config = Config()
 
 
 def resolve_env_path() -> Path:
-    """Return the canonical ``.env`` path used for persisting settings.
-
-    Always the project root, never the package directory.
-    """
+    """Return the canonical ``.env`` path used for persisting settings."""
     return PROJECT_ROOT_ENV_PATH
 
 
 def set_custom_profile(profile: str | None) -> None:
-    """Update the selected custom profile at runtime and expose it via env.
-
-    This ensures modules that read `config` and code that inspects the
-    environment see a consistent value.
-    """
+    """Update the selected custom profile at runtime and expose it via env."""
     if LOCKED_PROFILE is not None:
         return
     try:
@@ -270,7 +243,6 @@ def set_custom_profile(profile: str | None) -> None:
         if profile:
             _os.environ["REACHY_MINI_CUSTOM_PROFILE"] = profile
         else:
-            # Remove to reflect default
             _os.environ.pop("REACHY_MINI_CUSTOM_PROFILE", None)
     except Exception:
         pass

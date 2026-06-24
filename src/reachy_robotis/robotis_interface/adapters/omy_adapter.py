@@ -20,7 +20,6 @@ class OMYAdapter(RobotAdapter):
         self.registry = registry
         config = registry.get("omy")
 
-        # Extract SSH/Docker config
         host = str(config.get("host") or "192.168.50.56")
         user = str(config.get("user") or "pollen")
         container = str(config.get("container_name") or "omy_ros2")
@@ -37,9 +36,6 @@ class OMYAdapter(RobotAdapter):
             timeout_s=30.0,
         )
 
-        # Do NOT run a blocking SSH check at startup: it slows boot and would let
-        # us claim online without a fresh result. Status stays not_checked
-        # (seeded from config) until probe() runs a real connectivity test.
         self.status_store.update(
             "omy",
             mode="ssh_docker",
@@ -70,7 +66,6 @@ class OMYAdapter(RobotAdapter):
 
     async def run_command(self, command: CommandDefinition) -> ActionResult:
         """Execute command on OMY via SSH Docker."""
-        # Check if command is allowlisted
         configured_cmd = self.registry.command_for("omy", command.command_key)
         if not configured_cmd:
             return ActionResult(

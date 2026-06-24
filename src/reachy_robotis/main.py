@@ -49,7 +49,6 @@ def main() -> None:
         show_help,
     )
 
-    # Check if a CLI command is being run
     if len(sys.argv) > 1:
         command = sys.argv[1]
         if command == "list-tasks":
@@ -82,7 +81,6 @@ def run(
     instance_path: Optional[str] = None,
 ) -> None:
     """Run the Reachy Mini conversation app."""
-    # Lazy imports to avoid dependencies for CLI-only commands
     import gradio as gr
     from fastapi import FastAPI
     from fastapi.responses import RedirectResponse
@@ -90,7 +88,6 @@ def run(
     from gradio.utils import get_space
     from reachy_mini import ReachyMini, ReachyMiniApp
 
-    # Putting these dependencies here makes the dashboard faster to load when the conversation app is installed
     from reachy_robotis.moves import MovementManager
     from reachy_robotis.console import LocalStream
     from reachy_robotis.openai_realtime import OpenaiRealtimeHandler
@@ -101,8 +98,6 @@ def run(
     logger = setup_logger(args.debug)
     logger.info("Starting Reachy Mini Conversation App")
 
-    # HuggingFace API key fetch is opt-in only. Translate the explicit CLI flag
-    # into the env switch that console.py honors; never fetch by default.
     if getattr(args, "allow_hf_key_fetch", False):
         os.environ["REACHY_ROBOTIS_ENABLE_HF_FALLBACK"] = "1"
         logger.warning("--allow-hf-key-fetch set: HuggingFace API key fetch is enabled for this run.")
@@ -150,7 +145,6 @@ def run(
             logger.error("Please check your configuration and try again.")
             sys.exit(1)
 
-    # Auto-enable Gradio in simulation mode (both MuJoCo for daemon and mockup-sim for desktop app)
     status = robot.client.get_status()
     if isinstance(status, dict):
         simulation_enabled = status.get("simulation_enabled", False)
@@ -164,9 +158,6 @@ def run(
     if is_simulation and not args.gradio:
         logger.info("Simulation mode detected. Automatically enabling gradio flag.")
         args.gradio = True
-    # A standalone run uses LocalStream (robot mic/speaker conversation) and
-    # self-hosts the web UI — chat panel at "/", control panel at "/robotis" —
-    # mirroring the reference app. Pass --gradio to use the browser /chat audio UI.
 
     camera_worker, _, vision_manager = handle_vision_stuff(args, robot)
 
@@ -199,7 +190,6 @@ def run(
     handler = OpenaiRealtimeHandler(deps, gradio_mode=args.gradio, instance_path=instance_path)
 
     stream_manager: gr.Blocks | LocalStream | None = None
-    # True when we self-host the LocalStream web UI for a standalone run.
     standalone_web = False
 
     if args.gradio:
@@ -241,17 +231,10 @@ def run(
 
         personality_ui.wire_events(handler, stream_manager)
 
-        # Register the fastrtc WebRTC signaling routes (/chat/webrtc/offer,
-        # /chat/websocket/offer, telephone) BEFORE mounting the Gradio sub-app,
-        # otherwise the /chat mount shadows them and the mic/buttons get a 404
-        # on the WebRTC handshake (UI loads but nothing responds).
         stream.mount(app, path="/chat")
 
         app = gr.mount_gradio_app(app, stream.ui, path="/chat")
     else:
-        # LocalStream conversation (robot mic/speaker). Serve the web UI on a
-        # FastAPI app: chat page at "/", robot workflow panel at "/robotis". The Reachy
-        # Mini daemon supplies that app; for a standalone run we host one ourselves.
         if settings_app is None:
             settings_app = FastAPI()
             standalone_web = True
@@ -263,7 +246,6 @@ def run(
             instance_path=instance_path,
         )
 
-    # Each async service → its own thread/loop
     movement_manager.start()
     head_wobbler.start()
     if camera_worker:
@@ -287,12 +269,6 @@ def run(
 
     try:
         if args.gradio and app_stop_event is None:
-            # Standalone gradio run: serve the combined FastAPI app (Chat /
-            # Voice at "/" and "/chat", Robot Launcher at "/robotis")
-            # with uvicorn on all
-            # interfaces, so the app is reachable at http://<robot-ip>:7860/ and
-            # /robotis/* works on the same port. gr.Blocks.launch() would bind
-            # 127.0.0.1 only and would not serve the /robotis routes.
             import uvicorn
 
             server_name = os.getenv("GRADIO_SERVER_NAME", "0.0.0.0")
@@ -304,9 +280,6 @@ def run(
             )
             uvicorn.run(app, host=server_name, port=server_port)
         else:
-            # Standalone non-gradio: serve the self-hosted web UI (chat at "/",
-            # robot action interface at "/robotis") in a background thread, then
-            # run the conversation loops (blocking, robot mic/speaker).
             if standalone_web:
                 import uvicorn
 
@@ -332,23 +305,20 @@ def run(
         if vision_manager:
             vision_manager.stop()
 
-        # Ensure media is explicitly closed before disconnecting
         try:
             robot.media.close()
         except Exception as e:
             logger.debug(f"Error closing media during shutdown: {e}")
 
-        # prevent connection to keep alive some threads
         robot.client.disconnect()
         time.sleep(1)
         logger.info("Shutdown complete.")
 
 
-# Lazy import for ReachyMiniApp (only needed when running as Reachy Mini app)
 try:
     from reachy_mini import ReachyMiniApp
 except ImportError:
-    ReachyMiniApp = object  # Fallback for CLI-only environments
+    ReachyMiniApp = object
 
 
 class ReachyRobotis(ReachyMiniApp):  # type: ignore[misc]
@@ -364,8 +334,6 @@ class ReachyRobotis(ReachyMiniApp):  # type: ignore[misc]
 
         args, _ = parse_args()
 
-        # is_wireless = reachy_mini.client.get_status()["wireless_version"]
-        # args.head_tracker = None if is_wireless else "mediapipe"
 
         instance_path = self._get_instance_path().parent
         run(

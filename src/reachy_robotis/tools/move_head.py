@@ -27,7 +27,6 @@ class MoveHead(Tool):
         "required": ["direction"],
     }
 
-    # mapping: direction -> args for create_head_pose
     DELTAS: Dict[str, Tuple[int, int, int, int, int, int]] = {
         "left": (0, 0, 0, 0, 0, 40),
         "right": (0, 0, 0, 0, 0, -40),
@@ -47,25 +46,22 @@ class MoveHead(Tool):
         deltas = self.DELTAS.get(direction, self.DELTAS["front"])
         target = create_head_pose(*deltas, degrees=True)
 
-        # Use new movement manager
         try:
             movement_manager = deps.movement_manager
 
-            # Get current state for interpolation
             current_head_pose = deps.reachy_mini.get_current_head_pose()
             _, current_antennas = deps.reachy_mini.get_current_joint_positions()
 
-            # Create goto move
             goto_move = GotoQueueMove(
                 target_head_pose=target,
                 start_head_pose=current_head_pose,
-                target_antennas=(0, 0),  # Reset antennas to default
+                target_antennas=(0, 0),
                 start_antennas=(
                     current_antennas[0],
                     current_antennas[1],
-                ),  # Skip body_yaw
-                target_body_yaw=0,  # Reset body yaw
-                start_body_yaw=current_antennas[0],  # body_yaw is first in joint positions
+                ),
+                target_body_yaw=0,
+                start_body_yaw=current_antennas[0],
                 duration=deps.motion_duration_s,
             )
 

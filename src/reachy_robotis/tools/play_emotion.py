@@ -6,12 +6,10 @@ from reachy_robotis.tools.core_tools import Tool, ToolDependencies
 
 logger = logging.getLogger(__name__)
 
-# Initialize emotion library
 try:
     from reachy_mini.motion.recorded_move import RecordedMoves
     from reachy_robotis.dance_emotion_moves import EmotionQueueMove
 
-    # Note: huggingface_hub automatically reads HF_TOKEN from environment variables
     RECORDED_MOVES = RecordedMoves("pollen-robotics/reachy-mini-emotions-library")
     EMOTION_AVAILABLE = True
 except ImportError as e:
@@ -66,13 +64,11 @@ class PlayEmotion(Tool):
 
         logger.info("Tool call: play_emotion emotion=%s", emotion_name)
 
-        # Check if emotion exists
         try:
             emotion_names = RECORDED_MOVES.list_moves()
             if emotion_name not in emotion_names:
                 return {"error": f"Unknown emotion '{emotion_name}'. Available: {emotion_names}"}
 
-            # Add emotion to queue
             movement_manager = deps.movement_manager
             emotion_move = EmotionQueueMove(emotion_name, RECORDED_MOVES)
             movement_manager.queue_move(emotion_move)

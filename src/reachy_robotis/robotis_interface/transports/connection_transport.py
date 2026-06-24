@@ -1,19 +1,4 @@
-"""Generic SSH command transport driven by a ConnectionProfile.
-
-This is the core of the app: every robot action ultimately becomes an
-allowlisted CLI command delivered here. The command string itself ALWAYS comes
-from config (a command_key lookup) — this transport never accepts free-form
-shell from an LLM or user, and it builds the argv with shlex so nothing is
-interpreted by a local shell.
-
-Command assembly:
-
-    ssh [-i key] -p port user@host
-      -> cd working_dir
-      -> (host)      <command>
-         (container) docker exec <name> bash -lc "<ros_setup && command>"
-                     or  <helper_script> exec bash -lc "<ros_setup && command>"
-"""
+"""Generic SSH command transport driven by a ConnectionProfile."""
 
 from __future__ import annotations
 
@@ -39,7 +24,6 @@ class ConnectionTransport:
     def __init__(self, profile: ConnectionProfile) -> None:
         self.profile = profile
 
-    # ---- command assembly (pure, unit-testable) ----
     def _container_exec(self, command: str, *, detached: bool = False) -> str:
         """Wrap a command to run inside the container with ROS sourced."""
         p = self.profile
@@ -67,12 +51,7 @@ class ConnectionTransport:
 
     @staticmethod
     def _quote_remote_dir(path: str) -> str:
-        """Quote a remote directory while preserving a leading ``~`` for shell expansion.
-
-        ``working_dir`` lives on the REMOTE host, so we must let the remote shell
-        expand ``~`` rather than quoting it away. The path comes from trusted
-        config, not user input.
-        """
+        """Quote a remote directory while preserving a leading ``~`` for shell expansion."""
         if path == "~":
             return "~"
         if path.startswith("~/"):
@@ -132,7 +111,6 @@ class ConnectionTransport:
         """Human-readable rendering of the argv (for preview/tests)."""
         return shlex.join(self.build_argv(command, command_type, run_mode))
 
-    # ---- execution ----
     def _subprocess_environment(self) -> tuple[dict[str, str] | None, str | None]:
         """Build a one-use SSH_ASKPASS environment without placing secrets in argv."""
         if self.profile.auth_method not in {"password", "password_env"}:

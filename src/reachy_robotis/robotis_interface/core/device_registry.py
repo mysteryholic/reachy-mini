@@ -61,12 +61,7 @@ class DeviceRegistry:
         return sorted(commands.keys()) if isinstance(commands, dict) else []
 
     def command_spec(self, device: str, command_key: str) -> dict[str, Any] | None:
-        """Return the full structured spec for a command_key, or None.
-
-        Supports both the structured format
-        ``{display_name, command_type, command, run_mode}`` and the legacy flat
-        format ``command_key: "<shell string>"`` (normalized to a spec).
-        """
+        """Return the full structured spec for a command_key, or None."""
         commands = self.get(device).get("commands", {})
         if not isinstance(commands, dict):
             return None
@@ -81,7 +76,6 @@ class DeviceRegistry:
                 "command": str(value.get("command") or ""),
                 "run_mode": str(value.get("run_mode") or "foreground"),
             }
-        # Legacy flat string
         return {
             "command_key": command_key,
             "display_name": command_key,

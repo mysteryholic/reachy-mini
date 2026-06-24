@@ -47,7 +47,7 @@ reachy_robotis = "reachy_robotis.main:ReachyRobotis"
 "" = "src"
 
 [tool.setuptools.package-data]
-reachy_robotis = [ "images/*", "static/*", "robotis_interface/web/static/*", ".env.example", "demos/**/*.txt", "prompts_library/*.txt", "profiles/**/*.txt", "prompts/**/*.txt",]
+reachy_robotis = [ "images/*", "static/*", "robotis_interface/web/static/*", ".env.example", "demos/**/*.txt", "prompts_library/*.txt", "profiles/**/*.txt", "prompts/**/*.txt", "config/*.yaml", "tasks/*.yaml", "external_content/**/*",]
 
 [tool.ruff.lint]
 select = [ "E", "F", "W", "I", "C4", "D",]

@@ -1,10 +1,4 @@
-"""Settings UI routes for headless personality management.
-
-Exposes REST endpoints on the provided FastAPI settings app. The
-implementation schedules backend actions (apply personality, fetch voices)
-onto the running LocalStream asyncio loop using the supplied get_loop
-callable to avoid cross-thread issues.
-"""
+"""Settings UI routes for headless personality management."""
 
 from __future__ import annotations
 import asyncio
@@ -110,7 +104,6 @@ def mount_personality_routes(
 
     @app.post("/personalities/save")
     async def _save(request: Request) -> dict:  # type: ignore
-        # Accept raw JSON only to avoid validation-related 422s
         try:
             raw = await request.json()
         except Exception:
@@ -146,9 +139,7 @@ def mount_personality_routes(
         tools_text: Optional[str] = None,
         voice: Optional[str] = None,
     ) -> dict:  # type: ignore
-        # Accept query params, form-encoded, or raw JSON
         data = {"name": name, "instructions": instructions, "tools_text": tools_text, "voice": voice}
-        # Prefer form if present
         try:
             form = await request.form()
             for k in ("name", "instructions", "tools_text", "voice"):
@@ -156,7 +147,6 @@ def mount_personality_routes(
                     data[k] = str(form[k])
         except Exception:
             pass
-        # Try JSON
         try:
             raw = await request.json()
             if isinstance(raw, dict):
@@ -221,7 +211,6 @@ def mount_personality_routes(
         if loop is None:
             return JSONResponse({"ok": False, "error": "loop_unavailable"}, status_code=503)  # type: ignore
 
-        # Accept both JSON payload and query param for convenience
         sel_name: Optional[str] = None
         persist_flag = bool(persist) if persist is not None else False
         if payload and getattr(payload, "name", None):

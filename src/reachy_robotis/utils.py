@@ -41,17 +41,12 @@ def parse_args() -> Tuple[argparse.Namespace, list]:  # type: ignore
 
 
 def handle_vision_stuff(args: argparse.Namespace, current_robot: ReachyMini) -> Tuple[CameraWorker | None, Any, Any]:
-    """Initialize camera, head tracker, camera worker, and vision manager.
-
-    By default, vision is handled by gpt-realtime model when camera tool is used.
-    If --local-vision flag is used, a local vision model will process images periodically.
-    """
+    """Initialize camera, head tracker, camera worker, and vision manager."""
     camera_worker = None
     head_tracker = None
     vision_manager = None
 
     if not args.no_camera:
-        # Initialize head tracker if specified
         if args.head_tracker is not None:
             if args.head_tracker == "yolo":
                 from reachy_robotis.vision.yolo_head_tracker import HeadTracker
@@ -62,10 +57,8 @@ def handle_vision_stuff(args: argparse.Namespace, current_robot: ReachyMini) -> 
 
                 head_tracker = HeadTracker()
 
-        # Initialize camera worker
         camera_worker = CameraWorker(current_robot, head_tracker)
 
-        # Initialize vision manager only if local vision is requested
         if args.local_vision:
             try:
                 from reachy_robotis.vision.processors import initialize_vision_manager
@@ -92,11 +85,9 @@ def setup_logger(debug: bool) -> logging.Logger:
     )
     logger = logging.getLogger(__name__)
 
-    # Suppress WebRTC warnings
     warnings.filterwarnings("ignore", message=".*AVCaptureDeviceTypeExternal.*")
     warnings.filterwarnings("ignore", category=UserWarning, module="aiortc")
 
-    # Tame third-party noise (looser in DEBUG)
     if log_level == "DEBUG":
         logging.getLogger("aiortc").setLevel(logging.INFO)
         logging.getLogger("fastrtc").setLevel(logging.INFO)

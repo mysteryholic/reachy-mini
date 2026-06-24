@@ -178,7 +178,6 @@ def chat_mode_command() -> int:
     try:
         while True:
             try:
-                # Use sys.stdout.flush to ensure prompt is displayed
                 sys.stdout.write(">> ")
                 sys.stdout.flush()
                 user_input = sys.stdin.readline().strip()
@@ -244,7 +243,6 @@ def chat_mode_command() -> int:
                 print(f"   Connected: {'🟢 Yes' if snapshot.get('connected') else '🔴 No'}\n")
                 continue
 
-            # Execute the input as a task/command
             print(f"\n   ⏳ Executing: {user_input}...")
             try:
                 result = loop.run_until_complete(executor.run_resolved_text(user_input))

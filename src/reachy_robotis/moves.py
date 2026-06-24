@@ -1,35 +1,4 @@
-"""Movement system with sequential primary moves and additive secondary moves.
-
-Design overview
-- Primary moves (emotions, dances, goto, breathing) are mutually exclusive and run
-  sequentially.
-- Secondary moves (speech sway, face tracking) are additive offsets applied on top
-  of the current primary pose.
-- There is a single control point to the robot: `ReachyMini.set_target`.
-- The control loop runs near 100 Hz and is phase-aligned via a monotonic clock.
-- Idle behaviour starts an infinite `BreathingMove` after a short inactivity delay
-  unless listening is active.
-
-Threading model
-- A dedicated worker thread owns all real-time state and issues `set_target`
-  commands.
-- Other threads communicate via a command queue (enqueue moves, mark activity,
-  toggle listening).
-- Secondary offset producers set pending values guarded by locks; the worker
-  snaps them atomically.
-
-Units and frames
-- Secondary offsets are interpreted as metres for x/y/z and radians for
-  roll/pitch/yaw in the world frame (unless noted by `compose_world_offset`).
-- Antennas and `body_yaw` are in radians.
-- Head pose composition uses `compose_world_offset(primary_head, secondary_head)`;
-  the secondary offset must therefore be expressed in the world frame.
-
-Safety
-- Listening freezes antennas, then blends them back on unfreeze.
-- Interpolations and blends are used to avoid jumps at all times.
-- `set_target` errors are rate-limited in logs.
-"""
+"""Movement system with sequential primary moves and additive secondary moves."""
 
 from __future__ import annotations
 import time
@@ -54,11 +23,9 @@ from reachy_mini.utils.interpolation import (
 
 logger = logging.getLogger(__name__)
 
-# Configuration constants
-CONTROL_LOOP_FREQUENCY_HZ = 100.0  # Hz - Target frequency for the movement control loop
+CONTROL_LOOP_FREQUENCY_HZ = 100.0
 
-# Type definitions
-FullBodyPose = Tuple[NDArray[np.float32], Tuple[float, float], float]  # (head_pose_4x4, antennas, body_yaw)
+FullBodyPose = Tuple[NDArray[np.float32], Tuple[float, float], float]
 
 
 class BreathingMove(Move):  # type: ignore
@@ -70,86 +37,57 @@ class BreathingMove(Move):  # type: ignore
         interpolation_start_antennas: Tuple[float, float],
         interpolation_duration: float = 1.0,
     ):
-        """Initialize breathing move.
-
-        Args:
-            interpolation_start_pose: 4x4 matrix of current head pose to interpolate from
-            interpolation_start_antennas: Current antenna positions to interpolate from
-            interpolation_duration: Duration of interpolation to neutral (seconds)
-
-        """
+        """Initialize breathing move."""
         self.interpolation_start_pose = interpolation_start_pose
         self.interpolation_start_antennas = np.array(interpolation_start_antennas)
         self.interpolation_duration = interpolation_duration
 
-        # Neutral positions for breathing base
         self.neutral_head_pose = create_head_pose(0, 0, 0, 0, 0, 0, degrees=True)
         self.neutral_antennas = np.array([0.0, 0.0])
 
-        # Breathing parameters
-        self.breathing_z_amplitude = 0.005  # 5mm gentle breathing
-        self.breathing_frequency = 0.1  # Hz (6 breaths per minute)
-        self.antenna_sway_amplitude = np.deg2rad(15)  # 15 degrees
-        self.antenna_frequency = 0.5  # Hz (faster antenna sway)
+        self.breathing_z_amplitude = 0.005
+        self.breathing_frequency = 0.1
+        self.antenna_sway_amplitude = np.deg2rad(15)
+        self.antenna_frequency = 0.5
 
     @property
     def duration(self) -> float:
         """Duration property required by official Move interface."""
-        return float("inf")  # Continuous breathing (never ends naturally)
+        return float("inf")
 
     def evaluate(self, t: float) -> tuple[NDArray[np.float64] | None, NDArray[np.float64] | None, float | None]:
         """Evaluate breathing move at time t."""
         if t < self.interpolation_duration:
-            # Phase 1: Interpolate to neutral base position
             interpolation_t = t / self.interpolation_duration
 
-            # Interpolate head pose
             head_pose = linear_pose_interpolation(
                 self.interpolation_start_pose, self.neutral_head_pose, interpolation_t,
             )
 
-            # Interpolate antennas
             antennas_interp = (
                 1 - interpolation_t
             ) * self.interpolation_start_antennas + interpolation_t * self.neutral_antennas
             antennas = antennas_interp.astype(np.float64)
 
         else:
-            # Phase 2: Breathing patterns from neutral base
             breathing_time = t - self.interpolation_duration
 
-            # Gentle z-axis breathing
             z_offset = self.breathing_z_amplitude * np.sin(2 * np.pi * self.breathing_frequency * breathing_time)
             head_pose = create_head_pose(x=0, y=0, z=z_offset, roll=0, pitch=0, yaw=0, degrees=True, mm=False)
 
-            # Antenna sway (opposite directions)
             antenna_sway = self.antenna_sway_amplitude * np.sin(2 * np.pi * self.antenna_frequency * breathing_time)
             antennas = np.array([antenna_sway, -antenna_sway], dtype=np.float64)
 
-        # Return in official Move interface format: (head_pose, antennas_array, body_yaw)
         return (head_pose, antennas, 0.0)
 
 
 def combine_full_body(primary_pose: FullBodyPose, secondary_pose: FullBodyPose) -> FullBodyPose:
-    """Combine primary and secondary full body poses.
-
-    Args:
-        primary_pose: (head_pose, antennas, body_yaw) - primary move
-        secondary_pose: (head_pose, antennas, body_yaw) - secondary offsets
-
-    Returns:
-        Combined full body pose (head_pose, antennas, body_yaw)
-
-    """
+    """Combine primary and secondary full body poses."""
     primary_head, primary_antennas, primary_body_yaw = primary_pose
     secondary_head, secondary_antennas, secondary_body_yaw = secondary_pose
 
-    # Combine head poses using compose_world_offset; the secondary pose must be an
-    # offset expressed in the world frame (T_off_world) applied to the absolute
-    # primary transform (T_abs).
     combined_head = compose_world_offset(primary_head, secondary_head, reorthonormalize=True)
 
-    # Sum antennas and body_yaw
     combined_antennas = (
         primary_antennas[0] + secondary_antennas[0],
         primary_antennas[1] + secondary_antennas[1],
@@ -169,12 +107,10 @@ def clone_full_body_pose(pose: FullBodyPose) -> FullBodyPose:
 class MovementState:
     """State tracking for the movement system."""
 
-    # Primary move state
     current_move: Move | None = None
     move_start_time: float | None = None
     last_activity_time: float = 0.0
 
-    # Secondary move state (offsets)
     speech_offsets: Tuple[float, float, float, float, float, float] = (
         0.0,
         0.0,
@@ -192,7 +128,6 @@ class MovementState:
         0.0,
     )
 
-    # Status flags
     last_primary_pose: FullBodyPose | None = None
 
     def update_activity(self) -> None:
@@ -220,26 +155,7 @@ class LoopFrequencyStats:
 
 
 class MovementManager:
-    """Coordinate sequential moves, additive offsets, and robot output at 100 Hz.
-
-    Responsibilities:
-    - Own a real-time loop that samples the current primary move (if any), fuses
-      secondary offsets, and calls `set_target` exactly once per tick.
-    - Start an idle `BreathingMove` after `idle_inactivity_delay` when not
-      listening and no moves are queued.
-    - Expose thread-safe APIs so other threads can enqueue moves, mark activity,
-      or feed secondary offsets without touching internal state.
-
-    Timing:
-    - All elapsed-time calculations rely on `time.monotonic()` through `self._now`
-      to avoid wall-clock jumps.
-    - The loop attempts 100 Hz
-
-    Concurrency:
-    - External threads communicate via `_command_queue` messages.
-    - Secondary offsets are staged via dirty flags guarded by locks and consumed
-      atomically inside the worker loop.
-    """
+    """Coordinate sequential moves, additive offsets, and robot output at 100 Hz."""
 
     def __init__(
         self,
@@ -250,20 +166,16 @@ class MovementManager:
         self.current_robot = current_robot
         self.camera_worker = camera_worker
 
-        # Single timing source for durations
         self._now = time.monotonic
 
-        # Movement state
         self.state = MovementState()
         self.state.last_activity_time = self._now()
         neutral_pose = create_head_pose(0, 0, 0, 0, 0, 0, degrees=True)
         self.state.last_primary_pose = (neutral_pose, (0.0, 0.0), 0.0)
 
-        # Move queue (primary moves)
         self.move_queue: deque[Move] = deque()
 
-        # Configuration
-        self.idle_inactivity_delay = 0.3  # seconds
+        self.idle_inactivity_delay = 0.3
         self.target_frequency = CONTROL_LOOP_FREQUENCY_HZ
         self.target_period = 1.0 / self.target_frequency
 
@@ -273,16 +185,15 @@ class MovementManager:
         self._last_commanded_pose: FullBodyPose = clone_full_body_pose(self.state.last_primary_pose)
         self._listening_antennas: Tuple[float, float] = self._last_commanded_pose[1]
         self._antenna_unfreeze_blend = 1.0
-        self._antenna_blend_duration = 0.4  # seconds to blend back after listening
+        self._antenna_blend_duration = 0.4
         self._last_listening_blend_time = self._now()
-        self._breathing_active = False  # true when breathing move is running or queued
+        self._breathing_active = False
         self._listening_debounce_s = 0.15
         self._last_listening_toggle_time = self._now()
         self._last_set_target_err = 0.0
-        self._set_target_err_interval = 1.0  # seconds between error logs
+        self._set_target_err_interval = 1.0
         self._set_target_err_suppressed = 0
 
-        # Cross-thread signalling
         self._command_queue: "Queue[Tuple[str, Any]]" = Queue()
         self._speech_offsets_lock = threading.Lock()
         self._pending_speech_offsets: Tuple[float, float, float, float, float, float] = (
@@ -314,36 +225,21 @@ class MovementManager:
         self._freq_snapshot = LoopFrequencyStats()
 
     def queue_move(self, move: Move) -> None:
-        """Queue a primary move to run after the currently executing one.
-
-        Thread-safe: the move is enqueued via the worker command queue so the
-        control loop remains the sole mutator of movement state.
-        """
+        """Queue a primary move to run after the currently executing one."""
         self._command_queue.put(("queue_move", move))
 
     def clear_move_queue(self) -> None:
-        """Stop the active move and discard any queued primary moves.
-
-        Thread-safe: executed by the worker thread via the command queue.
-        """
+        """Stop the active move and discard any queued primary moves."""
         self._command_queue.put(("clear_queue", None))
 
     def set_speech_offsets(self, offsets: Tuple[float, float, float, float, float, float]) -> None:
-        """Update speech-induced secondary offsets (x, y, z, roll, pitch, yaw).
-
-        Offsets are interpreted as metres for translation and radians for
-        rotation in the world frame. Thread-safe via a pending snapshot.
-        """
+        """Update speech-induced secondary offsets (x, y, z, roll, pitch, yaw)."""
         with self._speech_offsets_lock:
             self._pending_speech_offsets = offsets
             self._speech_offsets_dirty = True
 
     def set_moving_state(self, duration: float) -> None:
-        """Mark the robot as actively moving for the provided duration.
-
-        Legacy hook used by goto helpers to keep inactivity and breathing logic
-        aware of manual motions. Thread-safe via the command queue.
-        """
+        """Mark the robot as actively moving for the provided duration."""
         self._command_queue.put(("set_moving_state", duration))
 
     def is_idle(self) -> bool:
@@ -358,15 +254,7 @@ class MovementManager:
         return self._now() - last_activity >= self.idle_inactivity_delay
 
     def set_listening(self, listening: bool) -> None:
-        """Enable or disable listening mode without touching shared state directly.
-
-        While listening:
-        - Antenna positions are frozen at the last commanded values.
-        - Blending is reset so that upon unfreezing the antennas return smoothly.
-        - Idle breathing is suppressed.
-
-        Thread-safe: the change is posted to the worker command queue.
-        """
+        """Enable or disable listening mode without touching shared state directly."""
         with self._shared_state_lock:
             if self._shared_is_listening == listening:
                 return
@@ -454,14 +342,12 @@ class MovementManager:
             self._is_listening = desired_state
             self._last_listening_blend_time = now
             if desired_state:
-                # Freeze: snapshot current commanded antennas and reset blend
                 self._listening_antennas = (
                     float(self._last_commanded_pose[1][0]),
                     float(self._last_commanded_pose[1][1]),
                 )
                 self._antenna_unfreeze_blend = 0.0
             else:
-                # Unfreeze: restart blending from frozen pose
                 self._antenna_unfreeze_blend = 0.0
             self.state.update_activity()
         else:
@@ -485,7 +371,6 @@ class MovementManager:
             if self.move_queue:
                 self.state.current_move = self.move_queue.popleft()
                 self.state.move_start_time = current_time
-                # Any real move cancels breathing mode flag
                 self._breathing_active = isinstance(self.state.current_move, BreathingMove)
                 logger.debug(f"Starting new move, duration: {self.state.current_move.duration}s")
 
@@ -500,8 +385,6 @@ class MovementManager:
             idle_for = current_time - self.state.last_activity_time
             if idle_for >= self.idle_inactivity_delay:
                 try:
-                    # These 2 functions return the latest available sensor data from the robot, but don't perform I/O synchronously.
-                    # Therefore, we accept calling them inside the control loop.
                     _, current_antennas = self.current_robot.get_current_joint_positions()
                     current_head_pose = self.current_robot.get_current_head_pose()
 
@@ -530,7 +413,6 @@ class MovementManager:
 
     def _get_primary_pose(self, current_time: float) -> FullBodyPose:
         """Get the primary full body pose from current move or neutral."""
-        # When a primary move is playing, sample it and cache the resulting pose
         if self.state.current_move is not None and self.state.move_start_time is not None:
             move_time = current_time - self.state.move_start_time
             head, antennas, body_yaw = self.state.current_move.evaluate(move_time)
@@ -551,7 +433,6 @@ class MovementManager:
             )
 
             self.state.last_primary_pose = clone_full_body_pose(primary_full_body_pose)
-        # Otherwise reuse the last primary pose so we avoid jumps between moves
         elif self.state.last_primary_pose is not None:
             primary_full_body_pose = clone_full_body_pose(self.state.last_primary_pose)
         else:
@@ -563,7 +444,6 @@ class MovementManager:
 
     def _get_secondary_pose(self) -> FullBodyPose:
         """Get the secondary full body pose from speech and face tracking offsets."""
-        # Combine speech sway offsets + face tracking offsets for secondary pose
         secondary_offsets = [
             self.state.speech_offsets[0] + self.state.face_tracking_offsets[0],
             self.state.speech_offsets[1] + self.state.face_tracking_offsets[1],
@@ -705,11 +585,9 @@ class MovementManager:
     def _update_face_tracking(self, current_time: float) -> None:
         """Get face tracking offsets from camera worker thread."""
         if self.camera_worker is not None:
-            # Get face tracking offsets from camera worker thread
             offsets = self.camera_worker.get_face_tracking_offsets()
             self.state.face_tracking_offsets = offsets
         else:
-            # No camera worker, use neutral offsets
             self.state.face_tracking_offsets = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
 
     def start(self) -> None:
@@ -723,33 +601,26 @@ class MovementManager:
         logger.debug("Move worker started")
 
     def stop(self) -> None:
-        """Request the worker thread to stop and wait for it to exit.
-
-        Before stopping, resets the robot to a neutral position.
-        """
+        """Request the worker thread to stop and wait for it to exit."""
         if self._thread is None or not self._thread.is_alive():
             logger.debug("Move worker not running; stop() ignored")
             return
 
         logger.info("Stopping movement manager and resetting to neutral position...")
 
-        # Clear any queued moves and stop current move
         self.clear_move_queue()
 
-        # Stop the worker thread first so it doesn't interfere
         self._stop_event.set()
         if self._thread is not None:
             self._thread.join()
             self._thread = None
         logger.debug("Move worker stopped")
 
-        # Reset to neutral position using goto_target (same approach as wake_up)
         try:
             neutral_head_pose = create_head_pose(0, 0, 0, 0, 0, 0, degrees=True)
             neutral_antennas = [0.0, 0.0]
             neutral_body_yaw = 0.0
 
-            # Use goto_target directly on the robot
             self.current_robot.goto_target(
                 head=neutral_head_pose,
                 antennas=neutral_antennas,
@@ -798,10 +669,7 @@ class MovementManager:
         }
 
     def working_loop(self) -> None:
-        """Control loop main movements - reproduces main_works.py control architecture.
-
-        Single set_target() call with pose fusion.
-        """
+        """Control loop main movements - reproduces main_works.py control architecture."""
         logger.debug("Starting enhanced movement control loop (100Hz)")
 
         loop_count = 0
@@ -817,30 +685,22 @@ class MovementManager:
                 freq_stats = self._update_frequency_stats(loop_start, prev_loop_start, freq_stats)
             prev_loop_start = loop_start
 
-            # 1) Poll external commands and apply pending offsets (atomic snapshot)
             self._poll_signals(loop_start)
 
-            # 2) Manage the primary move queue (start new move, end finished move, breathing)
             self._update_primary_motion(loop_start)
 
-            # 3) Update vision-based secondary offsets
             self._update_face_tracking(loop_start)
 
-            # 4) Build primary and secondary full-body poses, then fuse them
             head, antennas, body_yaw = self._compose_full_body_pose(loop_start)
 
-            # 5) Apply listening antenna freeze or blend-back
             antennas_cmd = self._calculate_blended_antennas(antennas)
 
-            # 6) Single set_target call - the only control point
             self._issue_control_command(head, antennas_cmd, body_yaw)
 
-            # 7) Adaptive sleep to align to next tick, then publish shared state
             sleep_time, freq_stats = self._schedule_next_tick(loop_start, freq_stats)
             self._publish_shared_state()
             self._record_frequency_snapshot(freq_stats)
 
-            # 8) Periodic telemetry on loop frequency
             self._maybe_log_frequency(loop_count, print_interval_loops, freq_stats)
 
             if sleep_time > 0:

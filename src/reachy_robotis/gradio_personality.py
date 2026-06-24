@@ -1,8 +1,4 @@
-"""Gradio personality UI components and wiring.
-
-This module encapsulates the UI elements and logic related to managing
-conversation "personalities" (profiles) so that `main.py` stays lean.
-"""
+"""Gradio personality UI components and wiring."""
 
 from __future__ import annotations
 from typing import Any
@@ -18,13 +14,11 @@ class PersonalityUI:
 
     def __init__(self) -> None:
         """Initialize the PersonalityUI instance."""
-        # Constants and paths
         self.DEFAULT_OPTION = "(built-in default)"
         self._profiles_root = Path(__file__).parent / "profiles"
         self._tools_dir = Path(__file__).parent / "tools"
         self._prompts_dir = Path(__file__).parent / "prompts"
 
-        # Components (initialized in create_components)
         self.personalities_dropdown: gr.Dropdown
         self.apply_btn: gr.Button
         self.status_md: gr.Markdown
@@ -37,7 +31,6 @@ class PersonalityUI:
         self.available_tools_cg: gr.CheckboxGroup
         self.save_btn: gr.Button
 
-    # ---------- Filesystem helpers ----------
     def _list_personalities(self) -> list[str]:
         names: list[str] = []
         try:
@@ -82,7 +75,6 @@ class PersonalityUI:
         s = re.sub(r"[^a-zA-Z0-9_-]", "", s)
         return s
 
-    # ---------- Public API ----------
     def create_components(self) -> None:
         """Instantiate Gradio components for the personality UI."""
         if LOCKED_PROFILE is not None:
@@ -129,7 +121,6 @@ class PersonalityUI:
             self.save_btn,
         ]
 
-    # ---------- Event wiring ----------
     def wire_events(self, handler: Any, blocks: gr.Blocks) -> None:
         """Attach event handlers to components within a Blocks context."""
 
@@ -215,7 +206,6 @@ class PersonalityUI:
             dict[str, Any], dict[str, Any], dict[str, Any], dict[str, Any], str, dict[str, Any]
         ]:
             try:
-                # Prefill with hints
                 instr_val = """# Write your instructions here\n# e.g., Keep responses concise and friendly."""
                 tools_txt_val = "# tools enabled for this profile\n"
                 return (

@@ -70,7 +70,6 @@ class TaskStatus(Tool):
 
             return result
 
-        # Get all running tools
         running = tool_manager.get_running_tools()
         if not running:
             return {
@@ -88,7 +87,6 @@ class TaskStatus(Tool):
                 "elapsed_seconds": round(elapsed, 1),
             }
 
-            # Add progress if tracking
             if tool.progress is not None:
                 tool_info["progress_percent"] = f"{tool.progress.progress:.0%}"
                 if tool.progress.message:

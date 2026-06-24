@@ -20,7 +20,6 @@ class AIWorkerAdapter(RobotAdapter):
         self.registry = registry
         config = registry.get("ai_worker")
 
-        # Extract SSH/Docker config
         host = str(config.get("host") or "192.168.50.57")
         user = str(config.get("user") or "robotis")
         container = str(config.get("container_name") or "ai_worker_ros2")
@@ -37,8 +36,6 @@ class AIWorkerAdapter(RobotAdapter):
             timeout_s=30.0,
         )
 
-        # Do NOT run a blocking SSH check at startup. Status stays not_checked
-        # (seeded from config) until probe() runs a real connectivity test.
         self.status_store.update(
             "ai_worker",
             mode="ssh_docker",
@@ -69,7 +66,6 @@ class AIWorkerAdapter(RobotAdapter):
 
     async def run_command(self, command: CommandDefinition) -> ActionResult:
         """Execute command on AI Worker via SSH Docker."""
-        # Check if command is allowlisted
         configured_cmd = self.registry.command_for("ai_worker", command.command_key)
         if not configured_cmd:
             return ActionResult(

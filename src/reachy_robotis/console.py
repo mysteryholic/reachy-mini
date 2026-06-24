@@ -1,13 +1,4 @@
-"""Bidirectional local audio stream with optional settings UI.
-
-In headless mode, there is no Gradio UI. If the OpenAI API key is not
-available via environment/.env, we expose a minimal settings page via the
-Reachy Mini Apps settings server to let non-technical users enter it.
-
-The settings UI is served from this package's ``static/`` folder and offers a
-single password field to set ``OPENAI_API_KEY``. Once set, we persist it to the
-app instance's ``.env`` file (if available) and proceed to start streaming.
-"""
+"""Bidirectional local audio stream with optional settings UI."""
 
 import os
 import sys
@@ -29,7 +20,6 @@ from reachy_robotis.headless_personality_ui import mount_personality_routes
 
 
 try:
-    # FastAPI is provided by the Reachy Mini Apps runtime
     from fastapi import FastAPI, Response
     from pydantic import BaseModel
     from fastapi.responses import FileResponse, JSONResponse
@@ -56,23 +46,17 @@ class LocalStream:
         settings_app: Optional[FastAPI] = None,
         instance_path: Optional[str] = None,
     ):
-        """Initialize the stream with an OpenAI realtime handler and pipelines.
-
-        - ``settings_app``: the Reachy Mini Apps FastAPI to attach settings endpoints.
-        - ``instance_path``: directory where per-instance ``.env`` should be stored.
-        """
+        """Initialize the stream with an OpenAI realtime handler and pipelines."""
         self.handler = handler
         self._robot = robot
         self._stop_event = asyncio.Event()
         self._tasks: List[asyncio.Task[None]] = []
-        # Allow the handler to flush the player queue when appropriate.
         self.handler._clear_queue = self.clear_audio_queue
         self._settings_app: Optional[FastAPI] = settings_app
         self._instance_path: Optional[str] = instance_path
         self._settings_initialized = False
         self._asyncio_loop = None
 
-    # ---- Settings UI (only when API key is missing) ----
     def _env_path(self) -> Path:
         """Canonical .env path for persistence (always project root)."""
         return resolve_env_path()
@@ -112,25 +96,13 @@ class LocalStream:
             return []
 
     def _persist_api_key(self, key: str) -> None:
-        """Persist API key to environment and instance ``.env`` if possible.
-
-        Behavior:
-        - Always sets ``OPENAI_API_KEY`` in process env and in-memory config.
-        - Writes/updates ``<instance_path>/.env``:
-          * If ``.env`` exists, replaces/append OPENAI_API_KEY line.
-          * Else, copies template from ``<instance_path>/.env.example`` when present,
-            otherwise falls back to the packaged template
-            ``reachy_robotis/.env.example``.
-          * Ensures the resulting file contains the full template plus the key.
-        - Loads the written ``.env`` into the current process environment.
-        """
+        """Persist API key to environment and instance ``.env`` if possible."""
         k = (key or "").strip()
         if not k:
             return
-        # Update live process env and config so consumers see it immediately
         try:
             os.environ["OPENAI_API_KEY"] = k
-        except Exception:  # best-effort
+        except Exception:
             pass
         try:
             config.OPENAI_API_KEY = k
@@ -151,10 +123,8 @@ class LocalStream:
                 lines.append(f"OPENAI_API_KEY={k}")
             final_text = "\n".join(lines) + "\n"
             env_path.write_text(final_text, encoding="utf-8")
-            # Never log the raw key.
             logger.info("Persisted OPENAI_API_KEY (%s) to %s", mask_api_key(k), env_path)
 
-            # Load the newly written .env into this process to ensure downstream imports see it
             try:
                 from dotenv import load_dotenv
 
@@ -220,11 +190,7 @@ class LocalStream:
         return None
 
     def _init_settings_ui_if_needed(self) -> None:
-        """Attach minimal settings UI to the settings app.
-
-        Always mounts the UI when a settings_app is provided so that users
-        see a confirmation message even if the API key is already configured.
-        """
+        """Attach minimal settings UI to the settings app."""
         if self._settings_initialized:
             return
         if self._settings_app is None:
@@ -235,7 +201,6 @@ class LocalStream:
 
         if hasattr(self._settings_app, "mount"):
             try:
-                # Serve /static/* assets
                 self._settings_app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
             except Exception:
                 pass
@@ -243,25 +208,21 @@ class LocalStream:
         class ApiKeyPayload(BaseModel):
             openai_api_key: str
 
-        # Open the conversation page by default; the dashboard remains at /robotis.
         @self._settings_app.get("/")
         def _root():  # type: ignore[no-untyped-def]
             from starlette.responses import RedirectResponse
 
             return RedirectResponse(url="/chat")
 
-        # GET /favicon.ico -> optional, avoid noisy 404s on some browsers
         @self._settings_app.get("/favicon.ico")
         def _favicon() -> Response:
             return Response(status_code=204)
 
-        # GET /status -> whether key is set
         @self._settings_app.get("/status")
         def _status() -> JSONResponse:
             has_key = bool(config.OPENAI_API_KEY and str(config.OPENAI_API_KEY).strip())
             return JSONResponse({"has_key": has_key})
 
-        # GET /ready -> whether backend finished loading tools
         @self._settings_app.get("/ready")
         def _ready() -> JSONResponse:
             try:
@@ -271,7 +232,6 @@ class LocalStream:
                 ready = False
             return JSONResponse({"ready": ready})
 
-        # POST /openai_api_key -> set/persist key
         @self._settings_app.post("/openai_api_key")
         def _set_key(payload: ApiKeyPayload) -> JSONResponse:
             key = (payload.openai_api_key or "").strip()
@@ -280,14 +240,12 @@ class LocalStream:
             self._persist_api_key(key)
             return JSONResponse({"ok": True})
 
-        # POST /validate_api_key -> validate key without persisting it
         @self._settings_app.post("/validate_api_key")
         async def _validate_key(payload: ApiKeyPayload) -> JSONResponse:
             key = (payload.openai_api_key or "").strip()
             if not key:
                 return JSONResponse({"valid": False, "error": "empty_key"}, status_code=400)
 
-            # Try to validate by checking if we can fetch the models
             try:
                 import httpx
 
@@ -306,9 +264,6 @@ class LocalStream:
                 logger.warning(f"API key validation failed: {e}")
                 return JSONResponse({"valid": False, "error": "validation_error"}, status_code=500)
 
-        # ---- typed chat (chat panel on the settings page) ----
-        # Deliver the typed text to the live conversation so the same brain
-        # (+ tools, incl. registered actions/recipes) responds as it does to voice.
         class ChatTextPayload(BaseModel):
             text: str
 
@@ -323,7 +278,6 @@ class LocalStream:
             ok = OpenaiRealtimeHandler.schedule_text_message(text)
             return JSONResponse({"ok": bool(ok)})
 
-        # The secondary text chat and API key page remains available on demand.
         @self._settings_app.get("/chat")
         def _chat_page() -> FileResponse:
             return FileResponse(str(index_file))
@@ -341,14 +295,9 @@ class LocalStream:
         self._settings_initialized = True
 
     def launch(self) -> None:
-        """Start the recorder/player and run the async processing loops.
-
-        If the OpenAI key is missing, expose a tiny settings UI via the
-        Reachy Mini settings server to collect it before starting streams.
-        """
+        """Start the recorder/player and run the async processing loops."""
         self._stop_event.clear()
 
-        # Reload the canonical project root .env (covers subsequent runs).
         try:
             from dotenv import load_dotenv
 
@@ -357,7 +306,6 @@ class LocalStream:
             env_path = self._env_path()
             if env_path.exists():
                 load_dotenv(dotenv_path=str(env_path), override=True)
-                # Update config with newly loaded values
                 new_key = os.getenv("OPENAI_API_KEY", "").strip()
                 if new_key:
                     try:
@@ -370,13 +318,10 @@ class LocalStream:
                         try:
                             set_custom_profile(new_profile.strip() or None)
                         except Exception:
-                            pass  # Best-effort profile update
+                            pass
         except Exception:
-            pass  # .env loading is optional; continue with defaults
+            pass
 
-        # HuggingFace fallback is disabled by default. It only runs when the user
-        # passes --allow-hf-key-fetch (which sets REACHY_ROBOTIS_ENABLE_HF_FALLBACK=1
-        # in main.py) or sets that env var explicitly. Never fetch a key otherwise.
         if os.getenv("REACHY_ROBOTIS_ENABLE_HF_FALLBACK", "0").strip().lower() in ("1", "true", "yes", "on"):
             if not (config.OPENAI_API_KEY and str(config.OPENAI_API_KEY).strip()):
                 logger.info("OPENAI_API_KEY not set, attempting to download from HuggingFace...")
@@ -386,19 +331,14 @@ class LocalStream:
                     key, status = client.predict(api_name="/claim_b_key")
                     if key and key.strip():
                         logger.info("Successfully downloaded API key from HuggingFace")
-                        # Persist it immediately
                         self._persist_api_key(key)
                 except Exception as e:
                     logger.warning(f"Failed to download API key from HuggingFace: {e}")
 
-        # Always expose settings UI if a settings app is available
-        # (do this AFTER loading/downloading the key so status endpoint sees the right value)
         self._init_settings_ui_if_needed()
 
-        # If key is still missing -> wait until provided via the settings UI
         if not (config.OPENAI_API_KEY and str(config.OPENAI_API_KEY).strip()):
             logger.warning("OPENAI_API_KEY not found. Open the app settings page to enter it.")
-            # Poll until the key becomes available (set via the settings UI)
             try:
                 while not (config.OPENAI_API_KEY and str(config.OPENAI_API_KEY).strip()):
                     time.sleep(0.2)
@@ -406,16 +346,13 @@ class LocalStream:
                 logger.info("Interrupted while waiting for API key.")
                 return
 
-        # Start media after key is set/available
         self._robot.media.start_recording()
         self._robot.media.start_playing()
-        time.sleep(1)  # give some time to the pipelines to start
+        time.sleep(1)
 
         async def runner() -> None:
-            # Capture loop for cross-thread personality actions
             loop = asyncio.get_running_loop()
             self._asyncio_loop = loop  # type: ignore[assignment]
-            # Mount personality routes now that loop and handler are available
             try:
                 if self._settings_app is not None:
                     mount_personality_routes(
@@ -433,8 +370,6 @@ class LocalStream:
                     await self.handler.start_up()
                 except Exception as e:
                     logger.error(f"OpenAI Realtime handler startup failed (conversation unavailable): {e}")
-                    # Keep running record/play loops even if handler fails
-                    # This allows robotis_interface web UI to continue working
                     await self._stop_event.wait()
 
             self._tasks = [
@@ -447,23 +382,14 @@ class LocalStream:
             except asyncio.CancelledError:
                 logger.info("Tasks cancelled during shutdown")
             finally:
-                # Ensure handler connection is closed
                 await self.handler.shutdown()
 
         asyncio.run(runner())
 
     def close(self) -> None:
-        """Stop the stream and underlying media pipelines.
-
-        This method:
-        - Stops audio recording and playback first
-        - Sets the stop event to signal async loops to terminate
-        - Cancels all pending async tasks (openai-handler, record-loop, play-loop)
-        """
+        """Stop the stream and underlying media pipelines."""
         logger.info("Stopping LocalStream...")
 
-        # Stop media pipelines FIRST before cancelling async tasks
-        # This ensures clean shutdown before PortAudio cleanup
         try:
             self._robot.media.stop_recording()
         except Exception as e:
@@ -474,10 +400,8 @@ class LocalStream:
         except Exception as e:
             logger.debug(f"Error stopping playback (may already be stopped): {e}")
 
-        # Now signal async loops to stop
         self._stop_event.set()
 
-        # Cancel all running tasks
         for task in self._tasks:
             if not task.done():
                 task.cancel()
@@ -486,7 +410,6 @@ class LocalStream:
         """Flush the player's appsrc to drop any queued audio immediately."""
         logger.info("User intervention: flushing player queue")
         if self._robot.media.backend == MediaBackend.GSTREAMER:
-            # Directly flush gstreamer audio pipe
             self._robot.media.audio.clear_player()
         elif self._robot.media.backend == MediaBackend.DEFAULT or self._robot.media.backend == MediaBackend.DEFAULT_NO_VIDEO:
             self._robot.media.audio.clear_output_buffer()
@@ -501,7 +424,7 @@ class LocalStream:
             audio_frame = self._robot.media.get_audio_sample()
             if audio_frame is not None:
                 await self.handler.receive((input_sample_rate, audio_frame))
-            await asyncio.sleep(0)  # avoid busy loop
+            await asyncio.sleep(0)
 
     async def play_loop(self) -> None:
         """Fetch outputs from the handler: log text and play audio frames."""
@@ -522,19 +445,14 @@ class LocalStream:
                 input_sample_rate, audio_data = handler_output
                 output_sample_rate = self._robot.media.get_output_audio_samplerate()
 
-                # Reshape if needed
                 if audio_data.ndim == 2:
-                    # Scipy channels last convention
                     if audio_data.shape[1] > audio_data.shape[0]:
                         audio_data = audio_data.T
-                    # Multiple channels -> Mono channel
                     if audio_data.shape[1] > 1:
                         audio_data = audio_data[:, 0]
 
-                # Cast if needed
                 audio_frame = audio_to_float32(audio_data)
 
-                # Resample if needed
                 if input_sample_rate != output_sample_rate:
                     audio_frame = resample(
                         audio_frame,
@@ -546,4 +464,4 @@ class LocalStream:
             else:
                 logger.debug("Ignoring output type=%s", type(handler_output).__name__)
 
-            await asyncio.sleep(0)  # yield to event loop
+            await asyncio.sleep(0)

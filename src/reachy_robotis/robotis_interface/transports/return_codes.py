@@ -1,8 +1,4 @@
-"""Human-readable interpretation of process/SSH return codes for the UI.
-
-Used by CLITransport and SSHDockerTransport so the panel can explain *why* a
-bringup failed instead of only showing a bare ``rc=137``.
-"""
+"""Human-readable interpretation of process/SSH return codes for the UI."""
 
 from __future__ import annotations
 

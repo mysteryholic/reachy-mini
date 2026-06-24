@@ -6,7 +6,6 @@ from reachy_robotis.tools.core_tools import Tool, ToolDependencies
 
 logger = logging.getLogger(__name__)
 
-# Initialize dance library
 try:
     from reachy_mini_dances_library.collection.dance import AVAILABLE_MOVES
     from reachy_robotis.dance_emotion_moves import DanceQueueMove
@@ -77,7 +76,6 @@ class Dance(Tool):
         if move_name not in AVAILABLE_MOVES:
             return {"error": f"Unknown dance move '{move_name}'. Available: {list(AVAILABLE_MOVES.keys())}"}
 
-        # Add dance moves to queue
         movement_manager = deps.movement_manager
         for _ in range(repeat):
             dance_move = DanceQueueMove(move_name)

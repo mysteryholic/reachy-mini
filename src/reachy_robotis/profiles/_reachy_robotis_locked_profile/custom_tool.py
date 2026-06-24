@@ -29,10 +29,5 @@ class CustomTool(Tool):
         message = kwargs.get("message", "no message")
         logger.info(f"CustomTool called with message: {message}")
 
-        # TODO: Add your custom logic here
-        # You have access to:
-        # - deps.reachy_mini: the robot SDK
-        # - deps.movement_manager: for queueing movements
-        # - deps.state: current conversation state
 
         return {"status": "ok"}

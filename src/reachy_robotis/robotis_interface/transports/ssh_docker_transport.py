@@ -25,18 +25,7 @@ class SSHDockerTransport:
         working_directory: str = "/root",
         timeout_s: float = 30.0,
     ) -> None:
-        """
-        Initialize SSH Docker transport.
-
-        Args:
-            device_id: Device identifier (omy, ai_worker)
-            host: SSH host address
-            user: SSH username
-            container_name: Docker container name
-            ros_setup_paths: List of ROS 2 setup scripts to source
-            working_directory: Working directory in container
-            timeout_s: Command timeout in seconds
-        """
+        """Initialize SSH Docker transport."""
         self.device_id = device_id
         self.host = host
         self.user = user
@@ -48,16 +37,13 @@ class SSHDockerTransport:
 
     def _build_command(self, cmd: str) -> str:
         """Build full SSH + Docker + ROS 2 setup command."""
-        # Build ROS 2 setup string
         setup_commands = ""
         if self.ros_setup_paths:
             setup_list = [f"source {path}" for path in self.ros_setup_paths]
             setup_commands = " && ".join(setup_list) + " && "
 
-        # Docker exec command with bash
         docker_cmd = f"docker exec {self.container_name} bash -c '{setup_commands}cd {self.working_directory} && {cmd}'"
 
-        # SSH wrapper
         ssh_cmd = f"ssh -o StrictHostKeyChecking=no -o BatchMode=yes -o ConnectTimeout=5 {self.user}@{self.host} '{docker_cmd}'"
 
         return ssh_cmd
@@ -68,17 +54,7 @@ class SSHDockerTransport:
         run_mode: str = "foreground",
         capture_output: bool = True,
     ) -> dict[str, Any]:
-        """
-        Execute command in remote Docker container.
-
-        Args:
-            command: Command to execute
-            run_mode: 'foreground' or 'detached'
-            capture_output: Whether to capture stdout/stderr
-
-        Returns:
-            Result dictionary with ok, message, output, error
-        """
+        """Execute command in remote Docker container."""
         try:
             ssh_cmd = self._build_command(command)
 
@@ -86,7 +62,6 @@ class SSHDockerTransport:
             logger.debug(f"[{self.device_id}] Full SSH command: {ssh_cmd}")
 
             if run_mode == "detached":
-                # Start in background, don't wait
                 subprocess.Popen(
                     ssh_cmd,
                     shell=True,
@@ -100,7 +75,6 @@ class SSHDockerTransport:
                     "error": "",
                 }
 
-            # Foreground: wait for completion
             result = subprocess.run(
                 ssh_cmd,
                 shell=True,
@@ -161,16 +135,7 @@ class SSHDockerTransport:
         command: str,
         run_mode: str = "foreground",
     ) -> ActionResult:
-        """
-        Async wrapper for run_command.
-
-        Args:
-            command: Command to execute
-            run_mode: 'foreground' or 'detached'
-
-        Returns:
-            ActionResult
-        """
+        """Async wrapper for run_command."""
         import asyncio
 
         result = await asyncio.to_thread(
@@ -196,7 +161,6 @@ class SSHDockerTransport:
     def check_connectivity(self) -> dict[str, Any]:
         """Check SSH and Docker connectivity."""
         try:
-            # Test SSH connection
             ssh_test = subprocess.run(
                 f"ssh -o StrictHostKeyChecking=no -o BatchMode=yes -o ConnectTimeout=3 {self.user}@{self.host} 'echo ok'",
                 shell=True,
@@ -213,7 +177,6 @@ class SSHDockerTransport:
                     "error": "SSH connection failed",
                 }
 
-            # Test Docker container
             docker_test = subprocess.run(
                 f"ssh -o StrictHostKeyChecking=no -o BatchMode=yes -o ConnectTimeout=3 {self.user}@{self.host} 'docker inspect {self.container_name} > /dev/null && echo ok'",
                 shell=True,
