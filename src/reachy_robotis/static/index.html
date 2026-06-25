@@ -27,22 +27,8 @@
           </div>
           <span class="chip">/robotis</span>
         </div>
-        <p class="muted">Reachy Mini listens to commands, resolves them through the Action Catalog, and executes them through OMX, OMY Raspberry Pi, AI Worker Jetson Orin 32GB, or Mock adapters.</p>
-        <div class="flow">
-          <span>Human says</span>
-          <span>Intent Resolver</span>
-          <span>Action Catalog</span>
-          <span>Device Adapter</span>
-          <span>Robot Action</span>
-        </div>
-        <div id="robotis-summary" class="summary-cards">
-          <div><b>Devices</b><span>Loading…</span></div>
-          <div><b>Actions</b><span>Loading…</span></div>
-          <div><b>Mode</b><span>Loading…</span></div>
-        </div>
         <div class="actions">
           <a class="button-link" href="/robotis">Open ROBOTIS Dashboard</a>
-          <a class="button-link ghost-link" href="/robotis#action-catalog">View registered actions</a>
         </div>
       </div>
 
@@ -66,29 +52,6 @@
           <button id="chat-send-btn" type="button">Send</button>
         </div>
         <div id="chat-status" class="muted" style="margin-top:8px;min-height:1.2em;"></div>
-      </div>
-
-      <div class="panel usage-panel">
-        <div class="panel-heading">
-          <div>
-            <p class="eyebrow">How to use</p>
-            <h2>What this app does</h2>
-          </div>
-        </div>
-        <div class="usage-grid">
-          <div>
-            <b>1. Try an utterance</b>
-            <p>Open the dashboard and type “push the box”, “start OMY leader mode”, or “start AI Worker” in the Intent Resolver panel.</p>
-          </div>
-          <div>
-            <b>2. Inspect the action</b>
-            <p>The Action Catalog shows trigger phrases, target device, and execution path before anything runs.</p>
-          </div>
-          <div>
-            <b>3. Run safely</b>
-            <p>Only registered tasks and allowlisted command keys can execute. The LLM cannot invent shell commands.</p>
-          </div>
-        </div>
       </div>
 
       <div id="configured" class="panel hidden">
