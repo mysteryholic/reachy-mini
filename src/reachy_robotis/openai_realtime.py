@@ -9,6 +9,7 @@ from pathlib import Path
 from datetime import datetime
 
 import cv2
+import httpx
 import numpy as np
 import gradio as gr
 from openai import AsyncOpenAI
@@ -17,7 +18,13 @@ from numpy.typing import NDArray
 from scipy.signal import resample
 from websockets.exceptions import ConnectionClosedError
 
-from reachy_robotis.config import config
+from reachy_robotis.config import (
+    HF_BACKEND,
+    OPENAI_BACKEND,
+    config,
+    get_hf_token,
+    parse_hf_realtime_url,
+)
 from reachy_robotis.prompts import get_session_voice, get_session_instructions
 from reachy_robotis.tools.core_tools import (
     ToolDependencies,
@@ -32,8 +39,10 @@ from reachy_robotis.tools.background_tool_manager import (
 
 logger = logging.getLogger(__name__)
 
-OPEN_AI_INPUT_SAMPLE_RATE: Final[Literal[24000]] = 24000
-OPEN_AI_OUTPUT_SAMPLE_RATE: Final[Literal[24000]] = 24000
+OPEN_AI_INPUT_SAMPLE_RATE: Final[int] = 24000
+OPEN_AI_OUTPUT_SAMPLE_RATE: Final[int] = 24000
+# The Hugging Face realtime backend uses native-rate 16 kHz PCM.
+HF_SAMPLE_RATE: Final[int] = 16000
 
 AUDIO_INPUT_COST_PER_1M = 32.0
 AUDIO_OUTPUT_COST_PER_1M = 64.0
@@ -75,19 +84,25 @@ class OpenaiRealtimeHandler(AsyncStreamHandler):
 
     def __init__(self, deps: ToolDependencies, gradio_mode: bool = False, instance_path: Optional[str] = None):
         """Initialize the handler."""
+        # Sample rate depends on the realtime backend: 24 kHz for OpenAI, native
+        # 16 kHz for the Hugging Face endpoint. The robot-side resample adapts the
+        # device rate to whichever value we set here.
+        sample_rate = HF_SAMPLE_RATE if config.BACKEND_PROVIDER == HF_BACKEND else OPEN_AI_OUTPUT_SAMPLE_RATE
+
         super().__init__(
             expected_layout="mono",
-            output_sample_rate=OPEN_AI_OUTPUT_SAMPLE_RATE,
-            input_sample_rate=OPEN_AI_INPUT_SAMPLE_RATE,
+            output_sample_rate=sample_rate,
+            input_sample_rate=sample_rate,
         )
-
-        self.output_sample_rate: Literal[24000] = self.output_sample_rate
-        self.input_sample_rate: Literal[24000] = self.input_sample_rate
 
         self.deps = deps
 
-        self.output_sample_rate = OPEN_AI_OUTPUT_SAMPLE_RATE
-        self.input_sample_rate = OPEN_AI_INPUT_SAMPLE_RATE
+        self.output_sample_rate = sample_rate
+        self.input_sample_rate = sample_rate
+
+        # Extra query params required when connecting to an allocated HF realtime
+        # session (empty for OpenAI).
+        self._realtime_connect_query: dict[str, str] = {}
 
         self.connection: Any = None
         self.output_queue: "asyncio.Queue[Tuple[int, NDArray[np.int16]] | AdditionalOutputs]" = asyncio.Queue()
@@ -354,8 +369,8 @@ class OpenaiRealtimeHandler(AsyncStreamHandler):
             )
         )
 
-    async def start_up(self) -> None:
-        """Start the handler with minimal retries on unexpected websocket closure."""
+    async def _build_openai_client(self) -> AsyncOpenAI:
+        """Build the OpenAI realtime client, resolving the API key as before."""
         openai_api_key = config.OPENAI_API_KEY
         if self.gradio_mode and not openai_api_key:
             await self.wait_for_args()  # type: ignore[no-untyped-call]
@@ -372,7 +387,48 @@ class OpenaiRealtimeHandler(AsyncStreamHandler):
                 logger.warning("OPENAI_API_KEY missing. Proceeding with a placeholder (tests/offline).")
                 openai_api_key = "DUMMY"
 
-        self.client = AsyncOpenAI(api_key=openai_api_key)
+        self._realtime_connect_query = {}
+        return AsyncOpenAI(api_key=openai_api_key)
+
+    async def _build_hf_client(self) -> AsyncOpenAI:
+        """Allocate a Hugging Face realtime session and build an OpenAI-compatible client.
+
+        The Pollen-managed proxy authenticates with the user's HF token and
+        returns a ``connect_url`` for an allocated realtime session.
+        """
+        bearer_token = get_hf_token() or ""
+        session_url = config.HF_REALTIME_SESSION_URL
+        if not session_url:
+            raise RuntimeError("Built-in Hugging Face session proxy URL is unavailable")
+
+        headers = {"Authorization": f"Bearer {bearer_token}"} if bearer_token else None
+        async with httpx.AsyncClient(timeout=15.0) as http_client:
+            response = await http_client.post(session_url, headers=headers)
+            response.raise_for_status()
+            payload = response.json()
+
+        connect_url = payload.get("connect_url")
+        if not isinstance(connect_url, str) or not connect_url:
+            raise RuntimeError(f"Session allocator response did not contain a valid connect_url: {payload!r}")
+
+        parsed = parse_hf_realtime_url(connect_url)
+        self._realtime_connect_query = parsed.connect_query
+        logger.info("Allocated Hugging Face realtime session %s", payload.get("session_id") or "<unknown>")
+        return AsyncOpenAI(
+            api_key=bearer_token or "DUMMY",
+            base_url=parsed.base_url,
+            websocket_base_url=parsed.websocket_base_url,
+        )
+
+    async def _build_realtime_client(self) -> AsyncOpenAI:
+        """Build the realtime client for the configured backend provider."""
+        if config.BACKEND_PROVIDER == HF_BACKEND:
+            return await self._build_hf_client()
+        return await self._build_openai_client()
+
+    async def start_up(self) -> None:
+        """Start the handler with minimal retries on unexpected websocket closure."""
+        self.client = await self._build_realtime_client()
 
         max_attempts = 3
         for attempt in range(1, max_attempts + 1):
@@ -391,6 +447,9 @@ class OpenaiRealtimeHandler(AsyncStreamHandler):
                     delay = base_delay + jitter
                     logger.info("Retrying in %.1f seconds...", delay)
                     await asyncio.sleep(delay)
+                    # HF sessions are single-use/expiring, so re-allocate before retrying.
+                    if config.BACKEND_PROVIDER == HF_BACKEND:
+                        self.client = await self._build_realtime_client()
                     continue
                 raise
             finally:
@@ -412,8 +471,12 @@ class OpenaiRealtimeHandler(AsyncStreamHandler):
                     self.connection = None
 
             if getattr(self, "client", None) is None:
-                logger.warning("Cannot restart: OpenAI client not initialized yet.")
+                logger.warning("Cannot restart: realtime client not initialized yet.")
                 return
+
+            # HF sessions are single-use/expiring, so re-allocate a fresh one.
+            if config.BACKEND_PROVIDER == HF_BACKEND:
+                self.client = await self._build_realtime_client()
 
             try:
                 self._connected_event.clear()
@@ -574,7 +637,20 @@ class OpenaiRealtimeHandler(AsyncStreamHandler):
 
     async def _run_realtime_session(self) -> None:
         """Establish and manage a single realtime session."""
-        async with self.client.realtime.connect(model=config.MODEL_NAME) as conn:
+        # The Hugging Face endpoint selects its own model (MODEL_NAME empty) and
+        # requires the session's extra query params; OpenAI takes an explicit
+        # model and no extra query. HF also uses native-rate PCM (rate=None).
+        connect_kwargs: dict[str, Any] = {}
+        if config.MODEL_NAME:
+            connect_kwargs["model"] = config.MODEL_NAME
+        if self._realtime_connect_query:
+            connect_kwargs["extra_query"] = self._realtime_connect_query
+
+        is_hf = config.BACKEND_PROVIDER == HF_BACKEND
+        input_pcm_rate = None if is_hf else self.input_sample_rate
+        output_pcm_rate = None if is_hf else self.output_sample_rate
+
+        async with self.client.realtime.connect(**connect_kwargs) as conn:
             try:
                 await conn.session.update(
                     session={
@@ -584,7 +660,7 @@ class OpenaiRealtimeHandler(AsyncStreamHandler):
                             "input": {
                                 "format": {
                                     "type": "audio/pcm",
-                                    "rate": self.input_sample_rate,
+                                    "rate": input_pcm_rate,
                                 },
                                 "transcription": {"model": "gpt-4o-transcribe", "language": "en"},
                                 "turn_detection": {
@@ -595,7 +671,7 @@ class OpenaiRealtimeHandler(AsyncStreamHandler):
                             "output": {
                                 "format": {
                                     "type": "audio/pcm",
-                                    "rate": self.output_sample_rate,
+                                    "rate": output_pcm_rate,
                                 },
                                 "voice": get_session_voice(),
                             },

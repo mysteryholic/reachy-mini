@@ -2,6 +2,8 @@ import os
 import sys
 import logging
 from pathlib import Path
+from urllib.parse import urlsplit, parse_qsl, urlunsplit
+from dataclasses import dataclass
 
 from dotenv import find_dotenv, load_dotenv
 
@@ -10,6 +12,74 @@ LOCKED_PROFILE: str | None = "_reachy_robotis_locked_profile"
 DEFAULT_PROFILES_DIRECTORY = Path(__file__).parent / "profiles"
 
 logger = logging.getLogger(__name__)
+
+# Realtime backend providers. The conversation app can talk to OpenAI Realtime
+# directly (requires OPENAI_API_KEY) or to the Hugging Face realtime backend,
+# which authenticates with the user's Hugging Face token and connects through a
+# Pollen-managed session proxy (no OpenAI key required). HuggingFace is the
+# default so the app works out of the box for Reachy Mini owners.
+OPENAI_BACKEND = "openai"
+HF_BACKEND = "huggingface"
+DEFAULT_BACKEND_PROVIDER = HF_BACKEND
+# App-managed Hugging Face Space proxy. It forwards to the current realtime
+# session allocator, so allocator changes do not require app releases.
+HF_REALTIME_SESSION_PROXY_URL = "https://pollen-robotics-reachy-mini-realtime-url.hf.space/session"
+
+
+def _normalize_backend_provider(value: str | None) -> str:
+    """Return a validated backend provider, defaulting to HuggingFace."""
+    candidate = (value or "").strip().lower()
+    if candidate in {OPENAI_BACKEND, HF_BACKEND}:
+        return candidate
+    if candidate:
+        logger.warning(
+            "Invalid BACKEND_PROVIDER=%r, expected one of %s. Using default %s.",
+            value,
+            (OPENAI_BACKEND, HF_BACKEND),
+            DEFAULT_BACKEND_PROVIDER,
+        )
+    return DEFAULT_BACKEND_PROVIDER
+
+
+@dataclass(frozen=True)
+class HFRealtimeURLParts:
+    """Parsed Hugging Face realtime URL components used for client setup."""
+
+    base_url: str
+    websocket_base_url: str
+    connect_query: dict[str, str]
+
+
+def parse_hf_realtime_url(realtime_url: str) -> HFRealtimeURLParts:
+    """Parse a Hugging Face realtime URL into OpenAI-compatible client endpoints."""
+    parsed = urlsplit(realtime_url)
+    scheme = parsed.scheme.lower()
+    if scheme not in {"ws", "wss", "http", "https"}:
+        raise ValueError(
+            "Expected Hugging Face realtime URL to start with ws://, wss://, http://, or https://, "
+            f"got: {realtime_url}"
+        )
+
+    path = parsed.path.rstrip("/")
+    if path.endswith("/realtime"):
+        base_path = path[: -len("/realtime")]
+    else:
+        base_path = path
+
+    connect_query = {
+        key: value
+        for key, value in parse_qsl(parsed.query, keep_blank_values=True)
+        if key != "model"
+    }
+    http_scheme = "https" if scheme in {"wss", "https"} else "http"
+    websocket_scheme = "wss" if scheme in {"wss", "https"} else "ws"
+    base_url = urlunsplit((http_scheme, parsed.netloc, base_path, "", ""))
+    websocket_base_url = urlunsplit((websocket_scheme, parsed.netloc, base_path, "", ""))
+    return HFRealtimeURLParts(
+        base_url=base_url,
+        websocket_base_url=websocket_base_url,
+        connect_query=connect_query,
+    )
 
 
 def _env_flag(name: str, default: bool = False) -> bool:
@@ -139,7 +209,18 @@ class Config:
 
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
-    MODEL_NAME = os.getenv("MODEL_NAME", "gpt-realtime")
+    # Realtime backend selection. Defaults to HuggingFace (HF token auth, no
+    # OpenAI key needed). Set BACKEND_PROVIDER=openai to use OpenAI Realtime.
+    BACKEND_PROVIDER = _normalize_backend_provider(os.getenv("BACKEND_PROVIDER"))
+
+    # The HuggingFace endpoint selects its own realtime model, so MODEL_NAME is
+    # empty for the HF backend; OpenAI keeps a concrete realtime model id.
+    if BACKEND_PROVIDER == HF_BACKEND:
+        MODEL_NAME = os.getenv("MODEL_NAME", "")
+    else:
+        MODEL_NAME = os.getenv("MODEL_NAME", "gpt-realtime")
+
+    HF_REALTIME_SESSION_URL = HF_REALTIME_SESSION_PROXY_URL
     HF_HOME = os.getenv("HF_HOME", "./cache")
     LOCAL_VISION_MODEL = os.getenv("LOCAL_VISION_MODEL", "HuggingFaceTB/SmolVLM2-2.2B-Instruct")
     HF_TOKEN = os.getenv("HF_TOKEN")
@@ -227,6 +308,24 @@ config = Config()
 def resolve_env_path() -> Path:
     """Return the canonical ``.env`` path used for persisting settings."""
     return PROJECT_ROOT_ENV_PATH
+
+
+def get_hf_token() -> str | None:
+    """Return the Hugging Face token from config/env, falling back to the CLI login.
+
+    Reachy Mini owners are logged in via ``hf auth login``; ``huggingface_hub``
+    exposes that token even when ``HF_TOKEN`` is not set in the environment.
+    """
+    token = (config.HF_TOKEN or "").strip()
+    if token:
+        return token
+    try:
+        import huggingface_hub as hf
+
+        cli_token = (hf.get_token() or "").strip()
+        return cli_token or None
+    except Exception:
+        return None
 
 
 def set_custom_profile(profile: str | None) -> None:

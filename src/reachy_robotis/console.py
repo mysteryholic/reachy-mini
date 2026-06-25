@@ -13,10 +13,27 @@ from scipy.signal import resample
 
 from reachy_mini import ReachyMini
 from reachy_mini.media.media_manager import MediaBackend
-from reachy_robotis.config import LOCKED_PROFILE, config, resolve_env_path
+from reachy_robotis.config import (
+    HF_BACKEND,
+    LOCKED_PROFILE,
+    config,
+    get_hf_token,
+    resolve_env_path,
+)
 from reachy_robotis.secret_utils import mask_api_key
 from reachy_robotis.openai_realtime import OpenaiRealtimeHandler
 from reachy_robotis.headless_personality_ui import mount_personality_routes
+
+
+def _backend_ready() -> bool:
+    """Return whether the configured realtime backend has the credentials it needs.
+
+    HuggingFace authenticates with the user's HF token (via ``hf auth login``);
+    OpenAI requires an ``OPENAI_API_KEY``.
+    """
+    if config.BACKEND_PROVIDER == HF_BACKEND:
+        return bool(get_hf_token())
+    return bool(config.OPENAI_API_KEY and str(config.OPENAI_API_KEY).strip())
 
 
 try:
@@ -220,7 +237,7 @@ class LocalStream:
 
         @self._settings_app.get("/status")
         def _status() -> JSONResponse:
-            has_key = bool(config.OPENAI_API_KEY and str(config.OPENAI_API_KEY).strip())
+            has_key = _backend_ready()
             return JSONResponse({"has_key": has_key})
 
         @self._settings_app.get("/ready")
@@ -322,29 +339,24 @@ class LocalStream:
         except Exception:
             pass
 
-        if os.getenv("REACHY_ROBOTIS_ENABLE_HF_FALLBACK", "1").strip().lower() in ("1", "true", "yes", "on"):
-            if not (config.OPENAI_API_KEY and str(config.OPENAI_API_KEY).strip()):
-                logger.info("OPENAI_API_KEY not set, attempting to download from HuggingFace...")
-                try:
-                    from gradio_client import Client
-                    client = Client("HuggingFaceM4/gradium_setup", verbose=False)
-                    key, status = client.predict(api_name="/claim_b_key")
-                    if key and key.strip():
-                        logger.info("Successfully downloaded API key from HuggingFace")
-                        self._persist_api_key(key)
-                except Exception as e:
-                    logger.warning(f"Failed to download API key from HuggingFace: {e}")
-
         self._init_settings_ui_if_needed()
 
-        if not (config.OPENAI_API_KEY and str(config.OPENAI_API_KEY).strip()):
+        # The HuggingFace backend authenticates with the user's HF token and needs
+        # no OpenAI key. Only the OpenAI backend blocks here waiting for a key to be
+        # entered on the settings page.
+        if config.BACKEND_PROVIDER != HF_BACKEND and not _backend_ready():
             logger.warning("OPENAI_API_KEY not found. Open the app settings page to enter it.")
             try:
-                while not (config.OPENAI_API_KEY and str(config.OPENAI_API_KEY).strip()):
+                while not _backend_ready():
                     time.sleep(0.2)
             except KeyboardInterrupt:
                 logger.info("Interrupted while waiting for API key.")
                 return
+        elif config.BACKEND_PROVIDER == HF_BACKEND and not _backend_ready():
+            logger.warning(
+                "No Hugging Face token found. Run 'hf auth login' or set HF_TOKEN "
+                "so the conversation backend can allocate a realtime session."
+            )
 
         self._robot.media.start_recording()
         self._robot.media.start_playing()

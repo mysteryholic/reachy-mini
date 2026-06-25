@@ -10,8 +10,20 @@ import pytest
 import reachy_robotis.openai_realtime as rt_mod
 import reachy_robotis.tools.background_tool_manager as btm_mod
 from reachy_robotis.openai_realtime import OpenaiRealtimeHandler, _compute_response_cost
+from reachy_robotis.config import OPENAI_BACKEND
 from reachy_robotis.tools.core_tools import ToolDependencies
 from reachy_robotis.tools.background_tool_manager import ToolCallRoutine
+
+
+@pytest.fixture(autouse=True)
+def _use_openai_backend(monkeypatch: Any) -> None:
+    """Pin these handler-internals tests to the OpenAI backend.
+
+    The default backend is HuggingFace, whose client setup performs a real
+    network call to allocate a session. These tests mock the OpenAI realtime
+    client, so they must exercise the OpenAI path to stay deterministic/offline.
+    """
+    monkeypatch.setattr(rt_mod.config, "BACKEND_PROVIDER", OPENAI_BACKEND)
 
 
 def _build_handler(loop: asyncio.AbstractEventLoop) -> OpenaiRealtimeHandler:
