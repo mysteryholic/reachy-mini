@@ -322,7 +322,7 @@ class LocalStream:
         except Exception:
             pass
 
-        if os.getenv("REACHY_ROBOTIS_ENABLE_HF_FALLBACK", "0").strip().lower() in ("1", "true", "yes", "on"):
+        if os.getenv("REACHY_ROBOTIS_ENABLE_HF_FALLBACK", "1").strip().lower() in ("1", "true", "yes", "on"):
             if not (config.OPENAI_API_KEY and str(config.OPENAI_API_KEY).strip()):
                 logger.info("OPENAI_API_KEY not set, attempting to download from HuggingFace...")
                 try:
