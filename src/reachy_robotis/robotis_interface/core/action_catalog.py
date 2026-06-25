@@ -4,7 +4,7 @@ from pathlib import Path
 from dataclasses import field, dataclass
 from typing import Any
 
-from reachy_robotis.robotis_interface.core.paths import project_path
+from reachy_robotis.robotis_interface.core.paths import persistent_path
 from reachy_robotis.robotis_interface.core.yaml_loader import load_mapping
 
 
@@ -60,7 +60,7 @@ class ActionCatalog:
     """Load and serve registered actions from robotis_actions.yaml."""
 
     def __init__(self, path: Path | None = None) -> None:
-        self.path = path or project_path("config", "robotis_actions.yaml")
+        self.path = path or persistent_path("config", "robotis_actions.yaml")
         self._actions: dict[str, ActionDefinition] = {}
         self.reload()
 

@@ -4,7 +4,7 @@ from pathlib import Path
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
-from reachy_robotis.robotis_interface.core.paths import project_path
+from reachy_robotis.robotis_interface.core.paths import persistent_path
 from reachy_robotis.robotis_interface.core.yaml_loader import dump_mapping, load_mapping
 
 
@@ -113,7 +113,7 @@ class RecipeCatalog:
     """Load Command Recipes from config/robotis_recipes.yaml."""
 
     def __init__(self, path: Path | None = None) -> None:
-        self.path = path or project_path("config", "robotis_recipes.yaml")
+        self.path = path or persistent_path("config", "robotis_recipes.yaml")
         self._recipes: dict[str, CommandRecipe] = {}
         self._preset_ids: set[str] = set()
         self.reload()

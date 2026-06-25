@@ -5,7 +5,7 @@ import socket
 from pathlib import Path
 from typing import Any
 
-from reachy_robotis.robotis_interface.core.paths import project_path
+from reachy_robotis.robotis_interface.core.paths import persistent_path
 from reachy_robotis.robotis_interface.core.yaml_loader import load_mapping
 
 
@@ -84,7 +84,7 @@ class ConnectionRegistry:
     """Load and serve SSH connection profiles from robotis_connections.yaml."""
 
     def __init__(self, path: Path | None = None) -> None:
-        self.path = path or project_path("config", "robotis_connections.yaml")
+        self.path = path or persistent_path("config", "robotis_connections.yaml")
         self._profiles: dict[str, ConnectionProfile] = {}
         self._runtime_passwords: dict[str, str] = {}
         self.reload()

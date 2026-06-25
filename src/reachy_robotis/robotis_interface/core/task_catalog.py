@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from reachy_robotis.robotis_interface.core.paths import project_path
+from reachy_robotis.robotis_interface.core.paths import persistent_path
 from reachy_robotis.robotis_interface.core.schemas import TaskDefinition, TaskStep
 from reachy_robotis.robotis_interface.core.yaml_loader import dump_mapping, load_mapping
 
@@ -11,7 +11,10 @@ class TaskCatalog:
     """Load, validate, list, and persist registered step-based tasks."""
 
     def __init__(self, paths: list[Path] | None = None) -> None:
-        self.paths = paths or [project_path("tasks", "demo_flow.yaml"), project_path("tasks", "omx_tasks.yaml")]
+        self.paths = paths or [
+            persistent_path("tasks", "demo_flow.yaml"),
+            persistent_path("tasks", "omx_tasks.yaml"),
+        ]
         self._tasks: dict[str, TaskDefinition] = {}
         self.reload()
 
