@@ -199,12 +199,26 @@ class OpenaiRealtimeHandler(AsyncStreamHandler):
         else:
             self._audio_input_muted_until = until
 
+    async def _clear_input_audio_buffer(self) -> None:
+        """Clear the server-side input audio buffer (OpenAI backend only).
+
+        The Hugging Face realtime endpoint does not implement the
+        ``input_audio_buffer.clear`` event and rejects it with an
+        "Unknown or invalid event" error. Muting still works regardless, because
+        ``_audio_input_muted_until`` stops audio from being appended.
+        """
+        if config.BACKEND_PROVIDER == HF_BACKEND:
+            return
+        if not self.connection:
+            return
+        await self.connection.input_audio_buffer.clear()
+
     async def _start_text_chat_audio_mute(self) -> None:
         self._set_text_chat_audio_mute(True, hold_s=30.0)
         if not self.connection:
             return
         try:
-            await self.connection.input_audio_buffer.clear()
+            await self._clear_input_audio_buffer()
         except Exception as exc:  # noqa: BLE001
             logger.debug("Could not clear input audio buffer for typed chat mute: %s", exc)
 
@@ -216,7 +230,7 @@ class OpenaiRealtimeHandler(AsyncStreamHandler):
             self._audio_input_muted_until = max(self._audio_input_muted_until, _time.monotonic() + 30.0)
             if self.connection:
                 try:
-                    await self.connection.input_audio_buffer.clear()
+                    await self._clear_input_audio_buffer()
                 except Exception as exc:  # noqa: BLE001
                     logger.debug("Could not clear input audio buffer for chat focus mute: %s", exc)
         else:
@@ -229,7 +243,7 @@ class OpenaiRealtimeHandler(AsyncStreamHandler):
         OpenaiRealtimeHandler._chat_only_default = self._chat_only_mode
         if self._chat_only_mode and self.connection:
             try:
-                await self.connection.input_audio_buffer.clear()
+                await self._clear_input_audio_buffer()
             except Exception as exc:  # noqa: BLE001
                 logger.debug("Could not clear input audio buffer for chat-only mode: %s", exc)
         return True
