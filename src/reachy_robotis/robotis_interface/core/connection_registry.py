@@ -12,7 +12,7 @@ from reachy_robotis.robotis_interface.core.yaml_loader import load_mapping
 class ConnectionProfile:
     """Resolved SSH connection profile for one robot target."""
 
-    def __init__(self, connection_id: str, data: dict[str, Any], password: str = "") -> None:
+    def __init__(self, connection_id: str, data: dict[str, Any], password: str | None = None) -> None:
         self.connection_id = connection_id
         self.display_name = str(data.get("display_name") or connection_id)
         self.target = str(data.get("target") or "")
@@ -42,7 +42,7 @@ class ConnectionProfile:
 
     def password(self) -> str:
         """Return the in-memory or environment-backed password without exposing it."""
-        if self._password:
+        if self._password is not None:
             return self._password
         if self.password_env:
             return os.getenv(self.password_env, "")
@@ -50,8 +50,8 @@ class ConnectionProfile:
 
     @property
     def has_password(self) -> bool:
-        """Whether a persisted password is stored for this profile (value never exposed)."""
-        return bool(self._password)
+        """Whether a persisted password is stored for this profile (value may be empty)."""
+        return self._password is not None
 
     def hosts_in_order(self) -> list[str]:
         """Primary host first, then fallbacks."""
@@ -107,7 +107,7 @@ class ConnectionRegistry:
         raw = data.get("passwords", {})
         if not isinstance(raw, dict):
             return {}
-        return {str(cid): str(value or "") for cid, value in raw.items() if str(value or "")}
+        return {str(cid): str(value or "") for cid, value in raw.items()}
 
     def _save_secrets(self) -> None:
         """Persist passwords to a private file (0600) outside the package dir."""
@@ -132,7 +132,7 @@ class ConnectionRegistry:
                 profiles[connection_id] = ConnectionProfile(
                     connection_id,
                     dict(value or {}),
-                    password=self._runtime_passwords.get(connection_id, ""),
+                    password=self._runtime_passwords.get(connection_id),
                 )
         self._profiles = profiles
 
@@ -148,12 +148,14 @@ class ConnectionRegistry:
 
         safe_data = dict(data)
         auth = dict(safe_data.get("auth") or {})
+        password_was_submitted = "password" in auth
         password = str(auth.pop("password", "") or "")
         safe_data["auth"] = auth
-        if password:
+        auth_method = str(auth.get("method") or "")
+        if password_was_submitted and auth_method in {"password", "password_env"}:
             self._runtime_passwords[connection_id] = password
             self._save_secrets()
-        elif str(auth.get("method") or "") not in {"password", "password_env"}:
+        elif password_was_submitted:
             if self._runtime_passwords.pop(connection_id, None) is not None:
                 self._save_secrets()
 
@@ -183,7 +185,7 @@ class ConnectionRegistry:
         profile = ConnectionProfile(
             connection_id,
             merged,
-            password=self._runtime_passwords.get(connection_id, ""),
+            password=self._runtime_passwords.get(connection_id),
         )
         self._profiles[connection_id] = profile
         return profile

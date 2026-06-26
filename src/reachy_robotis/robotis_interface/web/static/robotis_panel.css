@@ -873,6 +873,9 @@ code {
 }
 
 .product-card {
+  display: grid;
+  grid-template-rows: auto auto minmax(40px, auto) auto auto auto;
+  align-content: start;
   padding: 14px;
   border: 1px solid var(--line);
   border-radius: 10px;
@@ -891,6 +894,8 @@ code {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
+  align-content: start;
+  min-height: 198px;
 }
 
 .workflow-description {
@@ -898,6 +903,19 @@ code {
   margin: 10px 0;
   color: var(--muted);
   font-size: 13px;
+}
+
+.product-actions {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  align-items: stretch;
+}
+
+.product-actions button {
+  width: 100%;
+  min-height: 38px;
+  padding-inline: 8px;
+  white-space: normal;
 }
 
 .credential-note {
@@ -967,6 +985,7 @@ code {
 @media (max-width: 820px) {
   .product-grid,
   .product-fields,
+  .product-actions,
   .advanced-workflow-fields,
   .advanced-terminal-fields,
   .terminal-toolbar {

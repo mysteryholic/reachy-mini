@@ -116,7 +116,7 @@ class ConnectionTransport:
         if self.profile.auth_method not in {"password", "password_env"}:
             return None, None
         password = self.profile.password()
-        if not password:
+        if not password and not self.profile.has_password:
             raise ValueError("Password authentication is selected, but no password was provided.")
         handle = tempfile.NamedTemporaryFile("w", prefix="reachy_askpass_", suffix=".sh", delete=False)
         try:

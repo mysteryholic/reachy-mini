@@ -163,13 +163,13 @@ function renderProductCards() {
         </label>
       </div>
       <p class="workflow-description">${escapeHtml(product.workflows?.[0]?.description || "")}</p>
-      <div class="row">
+      <div class="row product-actions">
         <button type="button" class="secondary" data-product-action="save">Save Connection</button>
         <button type="button" class="secondary" data-product-action="test">Test Connection</button>
         <button type="button" data-product-action="run">Run</button>
         <button type="button" class="danger" data-product-action="stop">Stop</button>
       </div>
-      <p class="credential-note">Host, user, SSH key, and password are saved on this device and kept across restarts. For security the saved password is never shown again — leave it blank to keep it.</p>
+      <p class="credential-note">Host, user, SSH key, and password are saved on this device and kept across restarts. An empty password field is saved as an empty password.</p>
       <div class="card-result"><strong>Last Result</strong><span class="muted" data-card-result>Not run yet.</span></div>
       ${advancedWorkflow(product)}
     </article>`).join("");
@@ -188,14 +188,9 @@ function productConnectionPayload(productId) {
 }
 
 async function saveProductConnection(productId) {
-  const card = cardFor(productId);
   const payload = productConnectionPayload(productId);
   if (!payload.host) throw new Error("Enter Host/IP.");
   if (!payload.user) throw new Error("Enter User.");
-  const hasSavedPassword = card?.querySelector('[name="password"]')?.dataset.hasPassword === "1";
-  if (payload.auth_method === "password" && !payload.password && !hasSavedPassword) {
-    throw new Error("Enter Password.");
-  }
   return api(`/products/${encodeURIComponent(productId)}/connection`, {
     method: "POST",
     body: JSON.stringify(payload),
