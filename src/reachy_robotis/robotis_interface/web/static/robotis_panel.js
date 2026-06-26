@@ -40,6 +40,18 @@ function productById(productId) {
   return (state.summary.products || []).find((product) => product.product_id === productId);
 }
 
+function mergeProduct(product) {
+  if (!product?.product_id) return;
+  const products = state.summary.products || [];
+  const index = products.findIndex((item) => item.product_id === product.product_id);
+  if (index >= 0) {
+    products[index] = product;
+  } else {
+    products.push(product);
+  }
+  state.summary.products = products;
+}
+
 function recipeById(workflowId) {
   return (state.summary.recipes || []).find((recipe) => recipe.recipe_id === workflowId);
 }
@@ -188,16 +200,19 @@ function productConnectionPayload(productId) {
 
 async function saveProductConnection(productId) {
   const payload = productConnectionPayload(productId);
-  return api(`/products/${encodeURIComponent(productId)}/connection`, {
+  const data = await api(`/products/${encodeURIComponent(productId)}/connection`, {
     method: "POST",
     body: JSON.stringify(payload),
   });
+  mergeProduct(data.product);
+  return data;
 }
 
 async function saveProduct(productId) {
   const workflowId = selectedWorkflow(productId);
   const data = await saveProductConnection(productId);
   state.summary = await api("/ui/summary");
+  mergeProduct(data.product);
   renderProductCards();
   const updatedCard = cardFor(productId);
   const workflowSelect = updatedCard?.querySelector('[name="workflow"]');

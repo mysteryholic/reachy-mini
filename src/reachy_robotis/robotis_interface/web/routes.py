@@ -239,6 +239,31 @@ def create_robotis_router(
             )
         robotis_executor.task_catalog.reload()
 
+    def _public_product(product_id: str) -> dict[str, Any] | None:
+        """Return the product card payload exactly as /ui/summary will expose it."""
+        for product in product_presets.public_products(robotis_executor.connection_registry):
+            if product.get("product_id") == product_id:
+                return product
+        return None
+
+    def _product_connection_mismatches(
+        product: dict[str, Any] | None,
+        expected: dict[str, Any],
+    ) -> dict[str, dict[str, Any]]:
+        if product is None:
+            return {"product_id": {"expected": expected.get("product_id"), "actual": None}}
+        mismatches: dict[str, dict[str, Any]] = {}
+        for field in ("host", "user", "auth_method", "key_path"):
+            actual = str(product.get(field) or "")
+            wanted = str(expected.get(field) or "")
+            if actual != wanted:
+                mismatches[field] = {"expected": wanted, "actual": actual}
+        actual_port = int(product.get("port") or 22)
+        wanted_port = int(expected.get("port") or 22)
+        if actual_port != wanted_port:
+            mismatches["port"] = {"expected": wanted_port, "actual": actual_port}
+        return mismatches
+
     def _health_payload() -> dict[str, Any]:
         statuses = robotis_executor.status()
 
@@ -550,40 +575,73 @@ def create_robotis_router(
             payload.get("auth_method"), len(str(payload.get("password") or "")),
         )
         auth_method = str(payload.get("auth_method") or "password")
+        expected_state = {
+            "product_id": product_id,
+            "host": str(payload.get("host") or "").strip(),
+            "port": int(payload.get("port") or 22),
+            "user": str(payload.get("user") or "").strip(),
+            "auth_method": auth_method,
+            "key_path": str(payload.get("key_path") or "").strip(),
+        }
         auth = {
             "method": auth_method,
             "password": str(payload.get("password") or ""),
-            "key_path": str(payload.get("key_path") or ""),
+            "key_path": expected_state["key_path"],
             "password_env": "",
         }
         try:
             connection_id, connection = product_presets.connection_payload(
                 product_id,
-                host=str(payload.get("host") or "").strip(),
-                port=int(payload.get("port") or 22),
-                user=str(payload.get("user") or "").strip(),
+                host=expected_state["host"],
+                port=expected_state["port"],
+                user=expected_state["user"],
                 auth=auth,
             )
         except (KeyError, ValueError) as exc:
             return {"ok": False, "error": "invalid_product_connection", "message": str(exc)}
         profile = cr.save_connection(connection_id, connection)
-        product_presets.save_connection_state(
+        saved_state = product_presets.save_connection_state(
             product_id,
             {
-                "host": str(payload.get("host") or "").strip(),
-                "port": int(payload.get("port") or 22),
-                "user": str(payload.get("user") or "").strip(),
-                "auth_method": auth_method,
-                "key_path": str(payload.get("key_path") or ""),
+                "host": expected_state["host"],
+                "port": expected_state["port"],
+                "user": expected_state["user"],
+                "auth_method": expected_state["auth_method"],
+                "key_path": expected_state["key_path"],
             },
         )
         logger.warning(
-            "ROBOTIS_SAVE_DEBUG saved connection_id=%s -> disk host=%r user=%r",
-            connection_id, profile.host, profile.user,
+            "ROBOTIS_SAVE_DEBUG saved connection_id=%s state_path=%s state=%r -> disk host=%r user=%r auth=%r key=%r",
+            connection_id, product_presets.connection_state_path, saved_state,
+            profile.host, profile.user, profile.auth_method, profile.key_path,
         )
+        product_presets.reload()
         product_presets.install(cr, robotis_executor.recipe_catalog, robotis_executor.action_catalog)
+        saved_product = _public_product(product_id)
+        mismatches = _product_connection_mismatches(saved_product, expected_state)
+        if mismatches:
+            logger.error(
+                "ROBOTIS_SAVE_MISMATCH product=%s state_path=%s expected=%r product=%r mismatches=%r",
+                product_id, product_presets.connection_state_path, expected_state, saved_product, mismatches,
+            )
+            return {
+                "ok": False,
+                "error": "product_connection_save_mismatch",
+                "message": "Connection save did not round-trip to the product UI state.",
+                "product_id": product_id,
+                "expected": expected_state,
+                "product": saved_product,
+                "mismatches": mismatches,
+            }
         robotis_executor.record_event(f"Product connection saved: {product_id}")
-        return {"ok": True, "product_id": product_id, "connection": profile.to_public_mapping()}
+        current_profile = cr.get(connection_id) or profile
+        return {
+            "ok": True,
+            "product_id": product_id,
+            "connection": current_profile.to_public_mapping(),
+            "product": saved_product,
+            "saved_state": saved_state,
+        }
 
     @router.post("/products/{product_id}/test")
     async def test_product_connection(product_id: str, payload: dict[str, Any]) -> dict[str, Any]:

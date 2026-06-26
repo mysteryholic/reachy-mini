@@ -210,6 +210,125 @@ def test_product_connection_state_overrides_profile_defaults(tmp_path):
     assert product["key_path"] == ""
 
 
+def _save_product_form_like_route(
+    registry: ConnectionRegistry,
+    presets: ProductPresetCatalog,
+    product_id: str,
+    form: dict[str, str],
+) -> dict[str, object]:
+    expected = {
+        "host": form["host"].strip(),
+        "port": int(form.get("port") or 22),
+        "user": form["user"].strip(),
+        "auth_method": form["auth_method"],
+        "key_path": form["key_path"].strip(),
+    }
+    connection_id, connection = presets.connection_payload(
+        product_id,
+        host=expected["host"],
+        port=expected["port"],
+        user=expected["user"],
+        auth={
+            "method": expected["auth_method"],
+            "password": form.get("password", ""),
+            "key_path": expected["key_path"],
+            "password_env": "",
+        },
+    )
+    registry.save_connection(connection_id, connection)
+    presets.save_connection_state(product_id, expected)
+    presets.reload()
+    for current_product_id in presets.list_products():
+        current_connection_id, payload = presets.connection_payload(current_product_id)
+        registry.apply_preset(current_connection_id, payload)
+    product = next(item for item in presets.public_products(registry) if item["product_id"] == product_id)
+
+    for field, value in expected.items():
+        assert product[field] == value
+    return product
+
+
+def test_all_product_save_buttons_round_trip_to_public_summary(tmp_path):
+    config_path = tmp_path / "robotis_connections.yaml"
+    secrets_path = tmp_path / "robotis_secrets.yaml"
+    state_path = tmp_path / "robotis_product_connections.yaml"
+    registry = ConnectionRegistry(path=config_path, secrets_path=secrets_path)
+    presets = ProductPresetCatalog(connection_state_path=state_path)
+
+    cases = {
+        "omx": {
+            "host": "omx.local",
+            "user": "robotis",
+            "auth_method": "password",
+            "password": "omx-password",
+            "key_path": "",
+        },
+        "omy": {
+            "host": "omy.local",
+            "user": "",
+            "auth_method": "ssh_key",
+            "password": "",
+            "key_path": "~/.ssh/omy_key",
+        },
+        "ai_worker": {
+            "host": "ai-worker.local",
+            "user": "robotis",
+            "auth_method": "ssh_key",
+            "password": "",
+            "key_path": "~/.ssh/ai_worker_key",
+        },
+        "hx5_hand": {
+            "host": "hand.local",
+            "user": "robotis",
+            "auth_method": "password",
+            "password": "",
+            "key_path": "",
+        },
+    }
+
+    for product_id, form in cases.items():
+        _save_product_form_like_route(registry, presets, product_id, form)
+
+
+def test_ssh_key_products_can_be_saved_back_to_blank_state(tmp_path):
+    config_path = tmp_path / "robotis_connections.yaml"
+    secrets_path = tmp_path / "robotis_secrets.yaml"
+    state_path = tmp_path / "robotis_product_connections.yaml"
+    registry = ConnectionRegistry(path=config_path, secrets_path=secrets_path)
+    presets = ProductPresetCatalog(connection_state_path=state_path)
+
+    for product_id in ("omy", "ai_worker"):
+        _save_product_form_like_route(
+            registry,
+            presets,
+            product_id,
+            {
+                "host": f"{product_id}.local",
+                "user": "robotis",
+                "auth_method": "ssh_key",
+                "password": "",
+                "key_path": f"~/.ssh/{product_id}_key",
+            },
+        )
+        product = _save_product_form_like_route(
+            registry,
+            presets,
+            product_id,
+            {
+                "host": "",
+                "user": "",
+                "auth_method": "ssh_key",
+                "password": "",
+                "key_path": "",
+            },
+        )
+
+        assert product["host"] == ""
+        assert product["user"] == ""
+        assert product["auth_method"] == "ssh_key"
+        assert product["key_path"] == ""
+
+
 def test_ssh_key_path_is_displayed_raw_but_executed_expanded(tmp_path):
     config_path = tmp_path / "robotis_connections.yaml"
     secrets_path = tmp_path / "robotis_secrets.yaml"
