@@ -57,7 +57,9 @@ function authenticationFields(product) {
       </select>
     </label>
     <label data-auth-field="password" ${keyVisible ? "hidden" : ""}>Password
-      <input name="password" type="password" autocomplete="current-password" />
+      <input name="password" type="password" autocomplete="current-password"
+        data-has-password="${product.has_password ? "1" : ""}"
+        placeholder="${product.has_password ? "•••••• (saved — leave blank to keep)" : ""}" />
     </label>
     <label data-auth-field="ssh_key" ${keyVisible ? "" : "hidden"}>SSH key
       <input name="key_path" value="${escapeHtml(product.key_path || "~/.ssh/id_ed25519")}" />
@@ -180,10 +182,12 @@ function productConnectionPayload(productId) {
 }
 
 async function saveProductConnection(productId) {
+  const card = cardFor(productId);
   const payload = productConnectionPayload(productId);
   if (!payload.host) throw new Error("Enter Host/IP.");
   if (!payload.user) throw new Error("Enter User.");
-  if (payload.auth_method === "password" && !payload.password) {
+  const hasSavedPassword = card?.querySelector('[name="password"]')?.dataset.hasPassword === "1";
+  if (payload.auth_method === "password" && !payload.password && !hasSavedPassword) {
     throw new Error("Enter Password.");
   }
   return api(`/products/${encodeURIComponent(productId)}/connection`, {
@@ -197,7 +201,7 @@ async function saveProduct(productId) {
   const data = await saveProductConnection(productId);
   const authMethod = card.querySelector('[name="auth_method"]').value;
   const message = authMethod === "password"
-    ? "Connection saved. The password is available until the app stops."
+    ? "Connection and password saved (kept across restarts)."
     : "Connection and SSH key settings saved.";
   setText(card.querySelector("[data-card-result]"), message);
   return data;

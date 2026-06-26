@@ -5,7 +5,7 @@ import socket
 from pathlib import Path
 from typing import Any
 
-from reachy_robotis.robotis_interface.core.paths import persistent_path
+from reachy_robotis.robotis_interface.core.paths import data_dir, persistent_path
 from reachy_robotis.robotis_interface.core.yaml_loader import load_mapping
 
 
@@ -48,6 +48,11 @@ class ConnectionProfile:
             return os.getenv(self.password_env, "")
         return ""
 
+    @property
+    def has_password(self) -> bool:
+        """Whether a persisted password is stored for this profile (value never exposed)."""
+        return bool(self._password)
+
     def hosts_in_order(self) -> list[str]:
         """Primary host first, then fallbacks."""
         hosts = [self.host] if self.host else []
@@ -68,6 +73,7 @@ class ConnectionProfile:
             "auth_method": self.auth_method,
             "key_path": self.key_path,
             "password_env": self.password_env,
+            "has_password": self.has_password,
             "connect_timeout_sec": self.connect_timeout_sec,
             "command_timeout_sec": self.command_timeout_sec,
             "working_dir": self.working_dir,
@@ -83,11 +89,36 @@ class ConnectionProfile:
 class ConnectionRegistry:
     """Load and serve SSH connection profiles from robotis_connections.yaml."""
 
-    def __init__(self, path: Path | None = None) -> None:
+    def __init__(self, path: Path | None = None, secrets_path: Path | None = None) -> None:
         self.path = path or persistent_path("config", "robotis_connections.yaml")
+        self._secrets_path = secrets_path or (data_dir() / "config" / "robotis_secrets.yaml")
         self._profiles: dict[str, ConnectionProfile] = {}
-        self._runtime_passwords: dict[str, str] = {}
+        self._runtime_passwords: dict[str, str] = self._load_secrets()
         self.reload()
+
+    def _load_secrets(self) -> dict[str, str]:
+        """Load persisted passwords so they survive app restarts/reinstalls."""
+        if not self._secrets_path.exists():
+            return {}
+        try:
+            data = load_mapping(self._secrets_path)
+        except Exception:  # noqa: BLE001 - never let a bad secrets file crash startup
+            return {}
+        raw = data.get("passwords", {})
+        if not isinstance(raw, dict):
+            return {}
+        return {str(cid): str(value or "") for cid, value in raw.items() if str(value or "")}
+
+    def _save_secrets(self) -> None:
+        """Persist passwords to a private file (0600) outside the package dir."""
+        from reachy_robotis.robotis_interface.core.yaml_loader import dump_mapping
+
+        self._secrets_path.parent.mkdir(parents=True, exist_ok=True)
+        dump_mapping(self._secrets_path, {"passwords": dict(self._runtime_passwords)})
+        try:
+            self._secrets_path.chmod(0o600)
+        except OSError:
+            pass
 
     def reload(self) -> None:
         profiles: dict[str, ConnectionProfile] = {}
@@ -121,8 +152,10 @@ class ConnectionRegistry:
         safe_data["auth"] = auth
         if password:
             self._runtime_passwords[connection_id] = password
+            self._save_secrets()
         elif str(auth.get("method") or "") not in {"password", "password_env"}:
-            self._runtime_passwords.pop(connection_id, None)
+            if self._runtime_passwords.pop(connection_id, None) is not None:
+                self._save_secrets()
 
         existing = load_mapping(self.path) if self.path.exists() else {"connections": {}}
         connections = existing.get("connections") or {}

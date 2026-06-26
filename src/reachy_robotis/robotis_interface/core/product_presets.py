@@ -49,6 +49,7 @@ class ProductPresetCatalog:
                     "user": profile.user if profile else str(product.get("default_user") or ""),
                     "auth_method": profile.auth_method if profile else "password",
                     "key_path": profile.key_path if profile else "",
+                    "has_password": profile.has_password if profile else False,
                     "workflows": [
                         {
                             "workflow_id": workflow_id,
