@@ -11,9 +11,9 @@
       "port": 22,
       "user": "robotis",
       "auth": {
-        "method": "ssh_key",
-        "key_path": "~/.ssh/id_ed25519",
-        "password_env": "AI_WORKER_SSH_PASSWORD"
+        "method": "password",
+        "key_path": "",
+        "password_env": ""
       },
       "connect_timeout_sec": 5,
       "command_timeout_sec": 30,
@@ -41,8 +41,9 @@
       "port": 22,
       "user": "pollen",
       "auth": {
-        "method": "ssh_key",
-        "key_path": "~/.ssh/id_ed25519"
+        "method": "password",
+        "key_path": "",
+        "password_env": ""
       },
       "connect_timeout_sec": 5,
       "command_timeout_sec": 30,

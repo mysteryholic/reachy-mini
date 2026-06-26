@@ -153,12 +153,17 @@ class ConnectionRegistry:
         password = str(auth.pop("password", "") or "")
         safe_data["auth"] = auth
         auth_method = str(auth.get("method") or "")
-        if password_was_submitted and auth_method in {"password", "password_env"}:
-            self._runtime_passwords[connection_id] = password
-            self._save_secrets()
-        elif password_was_submitted:
-            if self._runtime_passwords.pop(connection_id, None) is not None:
+        if password_was_submitted:
+            if password and auth_method in {"password", "password_env"}:
+                # Store a real (non-empty) password for password-based auth.
+                self._runtime_passwords[connection_id] = password
                 self._save_secrets()
+            else:
+                # Empty password, or a non-password auth method, clears any stored
+                # secret so the profile reports has_password=False (lets the user
+                # actually delete a saved password). Form always submits the field.
+                if self._runtime_passwords.pop(connection_id, None) is not None:
+                    self._save_secrets()
 
         existing = load_mapping(self.path) if self.path.exists() else {"connections": {}}
         connections = existing.get("connections") or {}

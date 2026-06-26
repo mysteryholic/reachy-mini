@@ -569,11 +569,6 @@ def create_robotis_router(
         cr = robotis_executor.connection_registry
         if cr is None:
             return {"ok": False, "error": "connection_registry_unavailable"}
-        logger.warning(
-            "ROBOTIS_SAVE_DEBUG product=%s received host=%r user=%r auth_method=%r pw_len=%d",
-            product_id, payload.get("host"), payload.get("user"),
-            payload.get("auth_method"), len(str(payload.get("password") or "")),
-        )
         auth_method = str(payload.get("auth_method") or "password")
         expected_state = {
             "product_id": product_id,
@@ -609,11 +604,6 @@ def create_robotis_router(
                 "auth_method": expected_state["auth_method"],
                 "key_path": expected_state["key_path"],
             },
-        )
-        logger.warning(
-            "ROBOTIS_SAVE_DEBUG saved connection_id=%s state_path=%s state=%r -> disk host=%r user=%r auth=%r key=%r",
-            connection_id, product_presets.connection_state_path, saved_state,
-            profile.host, profile.user, profile.auth_method, profile.key_path,
         )
         product_presets.reload()
         product_presets.install(cr, robotis_executor.recipe_catalog, robotis_executor.action_catalog)
