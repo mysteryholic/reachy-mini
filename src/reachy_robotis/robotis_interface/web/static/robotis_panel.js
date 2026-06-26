@@ -64,7 +64,8 @@ function authenticationFields(product) {
     <label data-auth-field="password" ${keyVisible ? "hidden" : ""}>Password
       <input name="password" type="password" autocomplete="current-password"
         data-has-password="${product.has_password ? "1" : ""}"
-        placeholder="${product.has_password ? "•••••• (saved — leave blank to keep)" : ""}" />
+        value="${escapeHtml(product.password || "")}" />
+      <span class="show-pw"><input type="checkbox" data-action="toggle-pw" /> Show password</span>
     </label>
     <label data-auth-field="ssh_key" ${keyVisible ? "" : "hidden"}>SSH key
       <input name="key_path" value="${escapeHtml(product.key_path || "~/.ssh/id_ed25519")}" />
@@ -462,6 +463,10 @@ document.addEventListener("change", (event) => {
   if (target.matches('[name="auth_method"]')) {
     card.querySelector('[data-auth-field="password"]').hidden = target.value !== "password";
     card.querySelector('[data-auth-field="ssh_key"]').hidden = target.value !== "ssh_key";
+  }
+  if (target.matches('[data-action="toggle-pw"]')) {
+    const pw = card.querySelector('[name="password"]');
+    if (pw) pw.type = target.checked ? "text" : "password";
   }
 });
 

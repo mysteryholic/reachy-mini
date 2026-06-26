@@ -50,6 +50,10 @@ class ProductPresetCatalog:
                     "auth_method": profile.auth_method if profile else "password",
                     "key_path": profile.key_path if profile else "",
                     "has_password": profile.has_password if profile else False,
+                    # Local LAN dashboard: surface the saved password so the form
+                    # stays populated after refresh (user-requested). Kept out of
+                    # ConnectionProfile.to_public_mapping(), which LLM tools use.
+                    "password": profile.password() if profile else "",
                     "workflows": [
                         {
                             "workflow_id": workflow_id,
