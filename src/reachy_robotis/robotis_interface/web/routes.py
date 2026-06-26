@@ -4,8 +4,11 @@ import os
 import shlex
 import time
 import asyncio
+import logging
 from pathlib import Path
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 from fastapi import APIRouter, FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, JSONResponse, Response
@@ -541,6 +544,11 @@ def create_robotis_router(
         cr = robotis_executor.connection_registry
         if cr is None:
             return {"ok": False, "error": "connection_registry_unavailable"}
+        logger.warning(
+            "ROBOTIS_SAVE_DEBUG product=%s received host=%r user=%r auth_method=%r pw_len=%d",
+            product_id, payload.get("host"), payload.get("user"),
+            payload.get("auth_method"), len(str(payload.get("password") or "")),
+        )
         auth_method = str(payload.get("auth_method") or "password")
         auth = {
             "method": auth_method,
@@ -559,6 +567,10 @@ def create_robotis_router(
         except (KeyError, ValueError) as exc:
             return {"ok": False, "error": "invalid_product_connection", "message": str(exc)}
         profile = cr.save_connection(connection_id, connection)
+        logger.warning(
+            "ROBOTIS_SAVE_DEBUG saved connection_id=%s -> disk host=%r user=%r",
+            connection_id, profile.host, profile.user,
+        )
         product_presets.install(cr, robotis_executor.recipe_catalog, robotis_executor.action_catalog)
         robotis_executor.record_event(f"Product connection saved: {product_id}")
         return {"ok": True, "product_id": product_id, "connection": profile.to_public_mapping()}
