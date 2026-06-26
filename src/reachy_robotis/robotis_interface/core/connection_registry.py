@@ -177,7 +177,7 @@ class ConnectionRegistry:
         if existing is not None:
             merged["host"] = existing.host
             merged["port"] = existing.port
-            merged["user"] = existing.user or str(data.get("user") or "")
+            merged["user"] = existing.user
             merged["auth"] = {
                 "method": existing.auth_method,
                 "key_path": existing.key_path,

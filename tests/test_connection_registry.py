@@ -151,6 +151,9 @@ def test_product_connection_form_values_survive_reload(tmp_path):
         registry.save_connection(connection_id, connection)
 
     reloaded = ConnectionRegistry(path=config_path, secrets_path=secrets_path)
+    for product_id in cases:
+        connection_id, payload = presets.connection_payload(product_id)
+        reloaded.apply_preset(connection_id, payload)
     products = {item["product_id"]: item for item in presets.public_products(reloaded)}
 
     for product_id, form in cases.items():
