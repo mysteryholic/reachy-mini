@@ -68,7 +68,7 @@ function authenticationFields(product) {
       <span class="show-pw"><input type="checkbox" data-action="toggle-pw" /> Show password</span>
     </label>
     <label data-auth-field="ssh_key" ${keyVisible ? "" : "hidden"}>SSH key
-      <input name="key_path" value="${escapeHtml(product.key_path || "~/.ssh/id_ed25519")}" />
+      <input name="key_path" value="${escapeHtml(product.key_path || "")}" placeholder="~/.ssh/id_ed25519" />
     </label>`;
 }
 
