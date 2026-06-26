@@ -102,7 +102,7 @@ def test_product_connection_form_values_survive_reload(tmp_path):
     config_path = tmp_path / "robotis_connections.yaml"
     secrets_path = tmp_path / "robotis_secrets.yaml"
     registry = ConnectionRegistry(path=config_path, secrets_path=secrets_path)
-    presets = ProductPresetCatalog()
+    presets = ProductPresetCatalog(connection_state_path=tmp_path / "product_connections.yaml")
 
     cases = {
         "omx": {
@@ -149,6 +149,7 @@ def test_product_connection_form_values_survive_reload(tmp_path):
             },
         )
         registry.save_connection(connection_id, connection)
+        presets.save_connection_state(product_id, form)
 
     reloaded = ConnectionRegistry(path=config_path, secrets_path=secrets_path)
     for product_id in cases:
@@ -168,6 +169,45 @@ def test_product_connection_form_values_survive_reload(tmp_path):
     assert products["hx5_hand"]["has_password"] is True
     assert products["omy"]["has_password"] is False
     assert products["ai_worker"]["has_password"] is False
+
+
+def test_product_connection_state_overrides_profile_defaults(tmp_path):
+    config_path = tmp_path / "robotis_connections.yaml"
+    secrets_path = tmp_path / "robotis_secrets.yaml"
+    state_path = tmp_path / "robotis_product_connections.yaml"
+    registry = ConnectionRegistry(path=config_path, secrets_path=secrets_path)
+    presets = ProductPresetCatalog(connection_state_path=state_path)
+
+    connection_id, connection = presets.connection_payload(
+        "omy",
+        host="old-host",
+        port=22,
+        user="old-user",
+        auth={
+            "method": "ssh_key",
+            "password": "",
+            "key_path": "~/.ssh/old_key",
+            "password_env": "",
+        },
+    )
+    registry.save_connection(connection_id, connection)
+    presets.save_connection_state(
+        "omy",
+        {
+            "host": "",
+            "port": 22,
+            "user": "",
+            "auth_method": "ssh_key",
+            "key_path": "",
+        },
+    )
+
+    product = next(item for item in presets.public_products(registry) if item["product_id"] == "omy")
+
+    assert product["host"] == ""
+    assert product["user"] == ""
+    assert product["auth_method"] == "ssh_key"
+    assert product["key_path"] == ""
 
 
 def test_ssh_key_path_is_displayed_raw_but_executed_expanded(tmp_path):

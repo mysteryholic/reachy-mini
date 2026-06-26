@@ -567,6 +567,16 @@ def create_robotis_router(
         except (KeyError, ValueError) as exc:
             return {"ok": False, "error": "invalid_product_connection", "message": str(exc)}
         profile = cr.save_connection(connection_id, connection)
+        product_presets.save_connection_state(
+            product_id,
+            {
+                "host": str(payload.get("host") or "").strip(),
+                "port": int(payload.get("port") or 22),
+                "user": str(payload.get("user") or "").strip(),
+                "auth_method": auth_method,
+                "key_path": str(payload.get("key_path") or ""),
+            },
+        )
         logger.warning(
             "ROBOTIS_SAVE_DEBUG saved connection_id=%s -> disk host=%r user=%r",
             connection_id, profile.host, profile.user,

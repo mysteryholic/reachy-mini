@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any
 import re
 
-from reachy_robotis.robotis_interface.core.paths import project_path
+from reachy_robotis.robotis_interface.core.paths import project_path, persistent_path
 from reachy_robotis.robotis_interface.core.action_catalog import ActionCatalog, ActionDefinition
 from reachy_robotis.robotis_interface.core.recipe_catalog import CommandRecipe, RecipeCatalog
 from reachy_robotis.robotis_interface.core.connection_registry import ConnectionRegistry
@@ -15,8 +15,9 @@ from reachy_robotis.robotis_interface.core.yaml_loader import dump_mapping, load
 class ProductPresetCatalog:
     """Load ROBOTIS product defaults and generate runtime catalog entries."""
 
-    def __init__(self, path: Path | None = None) -> None:
+    def __init__(self, path: Path | None = None, connection_state_path: Path | None = None) -> None:
         self.path = path or project_path("config", "robotis_product_presets.yaml")
+        self.connection_state_path = connection_state_path or persistent_path("config", "robotis_product_connections.yaml")
         self._products: dict[str, dict[str, Any]] = {}
         self.reload()
 
@@ -34,21 +35,49 @@ class ProductPresetCatalog:
         product = self._products.get(product_id)
         return deepcopy(product) if product is not None else None
 
+    def _connection_state(self) -> dict[str, dict[str, Any]]:
+        if not self.connection_state_path.exists():
+            return {}
+        try:
+            data = load_mapping(self.connection_state_path)
+        except Exception:
+            return {}
+        products = data.get("products") or {}
+        if not isinstance(products, dict):
+            return {}
+        return {str(product_id): dict(value or {}) for product_id, value in products.items()}
+
+    def save_connection_state(self, product_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+        """Persist exactly what the product connection form should show after reload."""
+        state = self._connection_state()
+        clean = {
+            "host": str(payload.get("host") or ""),
+            "port": int(payload.get("port") or 22),
+            "user": str(payload.get("user") or ""),
+            "auth_method": str(payload.get("auth_method") or "password"),
+            "key_path": str(payload.get("key_path") or ""),
+        }
+        state[product_id] = clean
+        dump_mapping(self.connection_state_path, {"products": state})
+        return dict(clean)
+
     def public_products(self, connections: ConnectionRegistry | None = None) -> list[dict[str, Any]]:
         result: list[dict[str, Any]] = []
+        saved_state = self._connection_state()
         for product_id, product in self._products.items():
             connection_id = str(product.get("connection_id") or product_id)
             profile = connections.get(connection_id) if connections is not None else None
+            saved = saved_state.get(product_id, {})
             result.append(
                 {
                     "product_id": product_id,
                     "display_name": str(product.get("display_name") or product_id),
                     "connection_id": connection_id,
-                    "host": profile.host if profile else "",
-                    "port": profile.port if profile else 22,
-                    "user": profile.user if profile else str(product.get("default_user") or ""),
-                    "auth_method": profile.auth_method if profile else "password",
-                    "key_path": profile.key_path if profile else "",
+                    "host": str(saved["host"]) if "host" in saved else (profile.host if profile else ""),
+                    "port": int(saved["port"]) if "port" in saved else (profile.port if profile else 22),
+                    "user": str(saved["user"]) if "user" in saved else (profile.user if profile else str(product.get("default_user") or "")),
+                    "auth_method": str(saved["auth_method"]) if "auth_method" in saved else (profile.auth_method if profile else "password"),
+                    "key_path": str(saved["key_path"]) if "key_path" in saved else (profile.key_path if profile else ""),
                     "has_password": profile.has_password if profile else False,
                     # Local LAN dashboard: surface the saved password so the form
                     # stays populated after refresh (user-requested). Kept out of
