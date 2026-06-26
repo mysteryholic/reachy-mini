@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import os
 import json
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -21,7 +23,25 @@ def load_mapping(path: Path) -> dict[str, Any]:
 
 
 def dump_mapping(path: Path, data: dict[str, Any]) -> None:
-    """Write a mapping as readable JSON, which is valid YAML too."""
+    """Write a mapping as readable JSON (valid YAML too), atomically.
+
+    Writes to a temp file in the same directory and ``os.replace``s it into
+    place, so an interrupted or out-of-disk write can never truncate or corrupt
+    the existing file (the previous data survives instead of being lost).
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    payload = json.dumps(data, ensure_ascii=False, indent=2) + "\n"
+    fd, tmp_name = tempfile.mkstemp(dir=str(path.parent), prefix=f".{path.name}.", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(payload)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(tmp_name, path)
+    except BaseException:
+        try:
+            os.unlink(tmp_name)
+        except OSError:
+            pass
+        raise
 

@@ -20,6 +20,7 @@ function setText(selector, value) {
 
 async function api(path, options = {}) {
   const response = await fetch(`/robotis${path}`, {
+    cache: "no-store",
     headers: { "Content-Type": "application/json", ...(options.headers || {}) },
     ...options,
   });
@@ -163,7 +164,7 @@ function renderProductCards() {
         <button type="button" data-product-action="run">Run</button>
         <button type="button" class="danger" data-product-action="stop">Stop</button>
       </div>
-      <p class="credential-note">Host, user, and SSH key settings are saved on this device. Passwords stay only in memory until the app stops.</p>
+      <p class="credential-note">Host, user, SSH key, and password are saved on this device and kept across restarts. For security the saved password is never shown again — leave it blank to keep it.</p>
       <div class="card-result"><strong>Last Result</strong><span class="muted" data-card-result>Not run yet.</span></div>
       ${advancedWorkflow(product)}
     </article>`).join("");
@@ -203,7 +204,11 @@ async function saveProduct(productId) {
   const message = authMethod === "password"
     ? "Connection and password saved (kept across restarts)."
     : "Connection and SSH key settings saved.";
-  setText(card.querySelector("[data-card-result]"), message);
+  // Re-render from the server's saved state so the form always shows the
+  // persisted host/user (and the "saved" password placeholder), proving the
+  // round-trip rather than just echoing what was typed.
+  await refresh();
+  setText(cardFor(productId)?.querySelector("[data-card-result]"), message);
   return data;
 }
 

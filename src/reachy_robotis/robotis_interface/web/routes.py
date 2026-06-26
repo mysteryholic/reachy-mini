@@ -342,9 +342,14 @@ def create_robotis_router(
         return preview
 
     @router.get("/ui/summary")
-    async def ui_summary() -> dict[str, Any]:
+    async def ui_summary() -> JSONResponse:
         _reload_editable_config()
-        return _summary_payload()
+        # Never let a browser/proxy serve a stale snapshot: saved connection
+        # host/user must always reflect the current on-disk state on refresh.
+        return JSONResponse(
+            _summary_payload(),
+            headers={"Cache-Control": "no-store, no-cache, must-revalidate", "Pragma": "no-cache"},
+        )
 
     @router.get("/recipes")
     async def list_recipes() -> dict[str, Any]:
