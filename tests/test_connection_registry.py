@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 
 from reachy_robotis.robotis_interface.core.connection_registry import ConnectionRegistry
+from reachy_robotis.robotis_interface.core.product_presets import ProductPresetCatalog
 from reachy_robotis.robotis_interface.core.yaml_loader import load_mapping
 from reachy_robotis.robotis_interface.transports.connection_transport import ConnectionTransport
 
@@ -95,3 +96,100 @@ def test_switching_to_ssh_key_clears_saved_password(tmp_path):
 
     assert saved.has_password is False
     assert load_mapping(secrets_path)["passwords"] == {}
+
+
+def test_product_connection_form_values_survive_reload(tmp_path):
+    config_path = tmp_path / "robotis_connections.yaml"
+    secrets_path = tmp_path / "robotis_secrets.yaml"
+    registry = ConnectionRegistry(path=config_path, secrets_path=secrets_path)
+    presets = ProductPresetCatalog()
+
+    cases = {
+        "omx": {
+            "host": "",
+            "user": "",
+            "auth_method": "password",
+            "password": "",
+            "key_path": "",
+        },
+        "omy": {
+            "host": "omy.local",
+            "user": "",
+            "auth_method": "ssh_key",
+            "password": "",
+            "key_path": "",
+        },
+        "ai_worker": {
+            "host": "192.168.50.57",
+            "user": "robotis",
+            "auth_method": "ssh_key",
+            "password": "",
+            "key_path": "~/.ssh/custom_ai_worker",
+        },
+        "hx5_hand": {
+            "host": "hand.local",
+            "user": "",
+            "auth_method": "password",
+            "password": "",
+            "key_path": "",
+        },
+    }
+
+    for product_id, form in cases.items():
+        connection_id, connection = presets.connection_payload(
+            product_id,
+            host=form["host"],
+            port=22,
+            user=form["user"],
+            auth={
+                "method": form["auth_method"],
+                "password": form["password"],
+                "key_path": form["key_path"],
+                "password_env": "",
+            },
+        )
+        registry.save_connection(connection_id, connection)
+
+    reloaded = ConnectionRegistry(path=config_path, secrets_path=secrets_path)
+    products = {item["product_id"]: item for item in presets.public_products(reloaded)}
+
+    for product_id, form in cases.items():
+        product = products[product_id]
+        assert product["host"] == form["host"]
+        assert product["user"] == form["user"]
+        assert product["auth_method"] == form["auth_method"]
+        assert product["key_path"] == form["key_path"]
+        assert product["password"] == form["password"]
+
+    assert products["omx"]["has_password"] is True
+    assert products["hx5_hand"]["has_password"] is True
+    assert products["omy"]["has_password"] is False
+    assert products["ai_worker"]["has_password"] is False
+
+
+def test_ssh_key_path_is_displayed_raw_but_executed_expanded(tmp_path):
+    config_path = tmp_path / "robotis_connections.yaml"
+    secrets_path = tmp_path / "robotis_secrets.yaml"
+    registry = ConnectionRegistry(path=config_path, secrets_path=secrets_path)
+
+    profile = registry.save_connection(
+        "omy",
+        {
+            "display_name": "OMY",
+            "target": "omy",
+            "host": "omy.local",
+            "port": 22,
+            "user": "robotis",
+            "auth": {
+                "method": "ssh_key",
+                "password": "",
+                "key_path": "~/.ssh/omy_key",
+                "password_env": "",
+            },
+        },
+    )
+
+    argv = ConnectionTransport(profile).build_argv("true", command_type="host")
+    assert profile.to_public_mapping()["key_path"] == "~/.ssh/omy_key"
+    assert "-i" in argv
+    assert os.path.expanduser("~/.ssh/omy_key") in argv

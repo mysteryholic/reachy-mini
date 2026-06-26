@@ -189,8 +189,6 @@ function productConnectionPayload(productId) {
 
 async function saveProductConnection(productId) {
   const payload = productConnectionPayload(productId);
-  if (!payload.host) throw new Error("Enter Host/IP.");
-  if (!payload.user) throw new Error("Enter User.");
   return api(`/products/${encodeURIComponent(productId)}/connection`, {
     method: "POST",
     body: JSON.stringify(payload),

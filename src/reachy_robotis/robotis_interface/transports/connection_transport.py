@@ -101,8 +101,9 @@ class ConnectionTransport:
             ]
         else:
             argv += ["-o", "BatchMode=yes"]
-        if p.key_path and p.auth_method not in {"password", "password_env"}:
-            argv += ["-i", p.key_path]
+        key_path = p.expanded_key_path or p.key_path
+        if key_path and p.auth_method not in {"password", "password_env"}:
+            argv += ["-i", key_path]
         argv.append(f"{p.user}@{target_host}" if p.user else target_host)
         argv.append(self._remote_payload(command, command_type, run_mode))
         return argv

@@ -23,7 +23,8 @@ class ConnectionProfile:
         self.user = str(data.get("user") or "")
         auth = data.get("auth") or {}
         self.auth_method = str(auth.get("method") or "ssh_key")
-        self.key_path = os.path.expanduser(str(auth.get("key_path") or "")) if auth.get("key_path") else ""
+        self.key_path = str(auth.get("key_path") or "")
+        self.expanded_key_path = os.path.expanduser(self.key_path) if self.key_path else ""
         self.password_env = str(auth.get("password_env") or "")
         self._password = password
         self.connect_timeout_sec = int(data.get("connect_timeout_sec") or 5)

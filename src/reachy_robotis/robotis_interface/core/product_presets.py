@@ -73,7 +73,7 @@ class ProductPresetCatalog:
         *,
         host: str = "",
         port: int = 22,
-        user: str = "",
+        user: str | None = None,
         auth: dict[str, Any] | None = None,
     ) -> tuple[str, dict[str, Any]]:
         product = self._require_product(product_id)
@@ -89,7 +89,7 @@ class ProductPresetCatalog:
             "host": host,
             "fallback_hosts": [],
             "port": int(port or 22),
-            "user": user or str(product.get("default_user") or ""),
+            "user": str(product.get("default_user") or "") if user is None else user,
             "auth": dict(auth or {"method": "password"}),
             "working_dir": str(product.get("default_working_dir") or ""),
             "container": {
