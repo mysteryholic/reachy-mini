@@ -19,9 +19,9 @@
       "command_timeout_sec": 30,
       "working_dir": "~/ai_worker",
       "container": {
-        "mode": "helper_script",
+        "mode": "docker_exec",
         "helper_script": "./docker/container.sh",
-        "name": "ai_worker_ros2",
+        "name": "ai_worker",
         "exec_shell": "bash -lc"
       },
       "ros": {

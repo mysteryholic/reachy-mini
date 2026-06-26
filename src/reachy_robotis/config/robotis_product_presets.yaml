@@ -265,7 +265,8 @@
       "default_transport": "ssh_docker",
       "default_working_dir": "~/ai_worker",
       "docker": {
-        "mode": "helper_script",
+        "mode": "docker_exec",
+        "container_name": "ai_worker",
         "helper_script": "./docker/container.sh"
       },
       "ros": {

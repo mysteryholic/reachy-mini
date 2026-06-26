@@ -7,9 +7,9 @@
       "connection_id": "ai_worker_jetson",
       "host": "192.168.50.57",
       "user": "robotis",
-      "container_name": "ai_worker_ros2",
+      "container_name": "ai_worker",
       "docker_user": "",
-      "ros_setup_path": "/opt/ros/humble/setup.bash",
+      "ros_setup_path": "/opt/ros/jazzy/setup.bash",
       "working_directory": "/workspace",
       "dry_run": true,
       "commands": {
