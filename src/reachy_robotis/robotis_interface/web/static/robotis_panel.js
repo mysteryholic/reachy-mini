@@ -19,7 +19,11 @@ function setText(selector, value) {
 }
 
 async function api(path, options = {}) {
-  const response = await fetch(`/robotis${path}`, {
+  const method = (options.method || "GET").toUpperCase();
+  // Cache-busting query on reads defeats any browser/daemon-proxy caching that
+  // would otherwise serve a pre-save snapshot and make saves look reverted.
+  const bust = method === "GET" ? `${path.includes("?") ? "&" : "?"}_=${Date.now()}` : "";
+  const response = await fetch(`/robotis${path}${bust}`, {
     cache: "no-store",
     headers: { "Content-Type": "application/json", ...(options.headers || {}) },
     ...options,
@@ -204,11 +208,11 @@ async function saveProduct(productId) {
   const message = authMethod === "password"
     ? "Connection and password saved (kept across restarts)."
     : "Connection and SSH key settings saved.";
-  // Re-render from the server's saved state so the form always shows the
-  // persisted host/user (and the "saved" password placeholder), proving the
-  // round-trip rather than just echoing what was typed.
-  await refresh();
-  setText(cardFor(productId)?.querySelector("[data-card-result]"), message);
+  // Keep the values the user just typed on screen (they match what was saved).
+  // Do NOT re-render the card here: re-fetching the summary at save time could
+  // show a stale snapshot and make the save look reverted. Refresh state only.
+  state.summary = await api("/ui/summary");
+  setText(card.querySelector("[data-card-result]"), message);
   return data;
 }
 
