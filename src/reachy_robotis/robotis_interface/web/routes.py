@@ -269,15 +269,26 @@ def create_robotis_router(
         return _health_payload()
 
     @router.get("", response_class=HTMLResponse)
-    async def panel() -> str:
-        return """
+    async def panel() -> HTMLResponse:
+        # Derive the asset cache-busting tag from the static files' mtime so a
+        # redeploy (new file mtime) forces browsers to fetch the new JS/CSS
+        # instead of silently reusing a stale cached copy.
+        static_dir = Path(__file__).resolve().parent / "static"
+        try:
+            asset_v = str(int(max(
+                (static_dir / "robotis_panel.js").stat().st_mtime,
+                (static_dir / "robotis_panel.css").stat().st_mtime,
+            )))
+        except OSError:
+            asset_v = "0"
+        html = f"""
 <!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Reachy Mini Robot Launcher</title>
-    <link rel="stylesheet" href="/robotis/static/robotis_panel.css?v=20260624-presets" />
+    <link rel="stylesheet" href="/robotis/static/robotis_panel.css?v={asset_v}" />
   </head>
   <body>
     <main class="shell compact-shell">
@@ -320,10 +331,14 @@ def create_robotis_router(
         <div id="result" class="result-message muted" aria-live="polite"></div>
       </section>
     </main>
-    <script src="/robotis/static/robotis_panel.js?v=20260624-presets"></script>
+    <script src="/robotis/static/robotis_panel.js?v={asset_v}"></script>
   </body>
 </html>
 """
+        return HTMLResponse(
+            content=html,
+            headers={"Cache-Control": "no-store, no-cache, must-revalidate", "Pragma": "no-cache"},
+        )
 
     @router.get("/status")
     async def status() -> dict[str, Any]:
