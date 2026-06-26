@@ -918,13 +918,6 @@ code {
   white-space: normal;
 }
 
-.credential-note {
-  margin-top: 9px;
-  color: var(--muted);
-  font-size: 12px;
-  line-height: 1.4;
-}
-
 .card-result {
   display: grid;
   gap: 3px;

@@ -169,7 +169,6 @@ function renderProductCards() {
         <button type="button" data-product-action="run">Run</button>
         <button type="button" class="danger" data-product-action="stop">Stop</button>
       </div>
-      <p class="credential-note">Host, user, SSH key, and password are saved on this device and kept across restarts. An empty password field is saved as an empty password.</p>
       <div class="card-result"><strong>Last Result</strong><span class="muted" data-card-result>Not run yet.</span></div>
       ${advancedWorkflow(product)}
     </article>`).join("");
@@ -196,17 +195,17 @@ async function saveProductConnection(productId) {
 }
 
 async function saveProduct(productId) {
-  const card = cardFor(productId);
+  const workflowId = selectedWorkflow(productId);
   const data = await saveProductConnection(productId);
-  const authMethod = card.querySelector('[name="auth_method"]').value;
-  const message = authMethod === "password"
-    ? "Connection and password saved (kept across restarts)."
-    : "Connection and SSH key settings saved.";
-  // Keep the values the user just typed on screen (they match what was saved).
-  // Do NOT re-render the card here: re-fetching the summary at save time could
-  // show a stale snapshot and make the save look reverted. Refresh state only.
   state.summary = await api("/ui/summary");
-  setText(card.querySelector("[data-card-result]"), message);
+  renderProductCards();
+  const updatedCard = cardFor(productId);
+  const workflowSelect = updatedCard?.querySelector('[name="workflow"]');
+  if (workflowId && [...(workflowSelect?.options || [])].some((option) => option.value === workflowId)) {
+    workflowSelect.value = workflowId;
+    updateSelectedWorkflow(updatedCard);
+  }
+  setText(updatedCard?.querySelector("[data-card-result]"), "Connection saved.");
   return data;
 }
 
