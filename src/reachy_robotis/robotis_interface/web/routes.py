@@ -36,7 +36,7 @@ def create_robotis_router(
     device_registry = DeviceRegistry()
     product_presets = ProductPresetCatalog()
 
-    _camera_state: dict[str, Any] = {"detections": [], "ts": 0.0}
+    _camera_state: dict[str, Any] = {"detections": [], "ts": 0.0, "detecting": False, "last_error": ""}
 
     def _app_mode() -> str:
         if os.getenv("SPACE_ID") or os.getenv("SYSTEM") == "spaces":
@@ -1003,6 +1003,10 @@ def create_robotis_router(
         if frame is None:
             return None
 
+        frame_type = type(frame)
+        source_module = getattr(frame_type, "__module__", "")
+        is_pil_image = source_module.startswith("PIL.")
+
         array = np.asarray(frame)
         if array.size == 0:
             return None
@@ -1033,10 +1037,14 @@ def create_robotis_router(
         if channels == 1:
             return cv2.cvtColor(array[:, :, 0], cv2.COLOR_GRAY2BGR)
         if channels == 4:
-            return cv2.cvtColor(array, cv2.COLOR_RGBA2BGR)
+            if is_pil_image:
+                return cv2.cvtColor(array, cv2.COLOR_RGBA2BGR)
+            return np.ascontiguousarray(array[:, :, :3])
         if channels == 3:
-            # Reachy camera frames are usually RGB; OpenCV drawing/encoding expects BGR.
-            return cv2.cvtColor(array, cv2.COLOR_RGB2BGR)
+            color_space = os.getenv("REACHY_ROBOTIS_CAMERA_COLOR_SPACE", "bgr").strip().lower()
+            if is_pil_image or color_space == "rgb":
+                return cv2.cvtColor(array, cv2.COLOR_RGB2BGR)
+            return np.ascontiguousarray(array)
         return None
 
     def _encode_camera_jpeg(frame: Any, detections: list[dict[str, Any]] | None = None) -> bytes | None:
@@ -1119,11 +1127,27 @@ def create_robotis_router(
                         jpg = _placeholder_frame("Waiting for camera frame...")
                         await asyncio.sleep(0.25)
                     else:
-                        detections = await asyncio.to_thread(_run_detection, frame)
+                        now = time.monotonic()
+                        if now - float(_camera_state.get("ts") or 0.0) >= 1.0 and not _camera_state["detecting"]:
+                            detection_frame = frame.copy() if hasattr(frame, "copy") else frame
+                            _camera_state["detecting"] = True
+
+                            async def _detect_in_background() -> None:
+                                try:
+                                    await asyncio.to_thread(_run_detection, detection_frame)
+                                    _camera_state["last_error"] = ""
+                                except Exception as exc:  # noqa: BLE001 - camera stream must keep flowing
+                                    _camera_state["last_error"] = str(exc)
+                                finally:
+                                    _camera_state["detecting"] = False
+
+                            asyncio.create_task(_detect_in_background())
+
+                        detections = _camera_state["detections"]
                         jpg = await asyncio.to_thread(_encode_camera_jpeg, frame, detections)
                         if jpg is None:
                             jpg = _placeholder_frame("Failed to encode camera frame")
-                        await asyncio.sleep(0.15)
+                        await asyncio.sleep(0.04)
                 yield b"--frame\r\nContent-Type: image/jpeg\r\nCache-Control: no-store\r\n\r\n" + jpg + b"\r\n"
 
         return StreamingResponse(
@@ -1150,6 +1174,8 @@ def create_robotis_router(
                 "count": len(detections),
                 "counts": counts,
                 "detections": detections,
+                "detecting": bool(_camera_state.get("detecting")),
+                "last_error": _camera_state.get("last_error", ""),
             }
         )
 
