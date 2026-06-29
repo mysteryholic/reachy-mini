@@ -167,9 +167,9 @@ def _make_usage(
 @pytest.mark.parametrize(
     "usage_kwargs, expect_positive",
     [
-        # All token types present → positive cost
+        # All token types present -> positive cost
         ({"audio_in": 1000, "text_in": 2000, "image_in": 500, "audio_out": 800, "text_out": 300}, True),
-        # All None tokens → must not crash
+        # All None tokens -> must not crash
         ({"audio_in": None, "text_in": None, "image_in": None, "audio_out": None, "text_out": None}, False),
         # Mix of None and valid ints
         ({"audio_in": None, "text_in": 500, "image_in": None, "audio_out": 1000, "text_out": None}, True),
@@ -350,7 +350,7 @@ async def test_response_sender_retries_on_active_response_rejection(monkeypatch:
 
         async def __anext__(self) -> FakeEvent:
             event: FakeEvent = await event_queue.get()
-            if event is None:  # sentinel → end iteration
+            if event is None:  # sentinel -> end iteration
                 raise StopAsyncIteration
             return event
 
@@ -382,7 +382,7 @@ async def test_response_sender_retries_on_active_response_rejection(monkeypatch:
     asyncio.create_task(handler.start_up())
 
     # ---- Start tools via the real BackgroundToolManager pipeline ----
-    # start_tool → _run_tool → notification queue → listener → _handle_tool_result
+    # start_tool -> _run_tool -> notification queue -> listener -> _handle_tool_result
 
     for i in range(N_TOOL_RESULTS):
         await handler.tool_manager.start_tool(

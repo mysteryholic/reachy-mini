@@ -591,7 +591,7 @@ class OpenaiRealtimeHandler(AsyncStreamHandler):
                         "role": "assistant",
                         "content": json.dumps(tool_result),
                         "metadata": {
-                            "title": f"🛠️ Used tool {bg_tool.tool_name}",
+                            "title": f"Used tool {bg_tool.tool_name}",
                             "status": "done",
                         },
                     },
@@ -827,7 +827,7 @@ class OpenaiRealtimeHandler(AsyncStreamHandler):
                         call_id: str = str(getattr(event, "call_id", uuid.uuid4()))
 
                         logger.info(
-                            "Tool call received — tool_name=%r, call_id=%s, is_idle=%s, args=%s",
+                            "Tool call received - tool_name=%r, call_id=%s, is_idle=%s, args=%s",
                             tool_name, call_id, self.is_idle_tool_call, args_json_str,
                         )
 
@@ -854,7 +854,7 @@ class OpenaiRealtimeHandler(AsyncStreamHandler):
                             AdditionalOutputs(
                                 {
                                     "role": "assistant",
-                                    "content": f"🛠️ Used tool {tool_name} with args {args_json_str}. The tool is now running. Tool ID: {bg_tool.tool_id}",
+                                    "content": f"Used tool {tool_name} with args {args_json_str}. The tool is now running. Tool ID: {bg_tool.tool_id}",
                                 },
                             ),
                         )

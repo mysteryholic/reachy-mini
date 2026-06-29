@@ -450,7 +450,7 @@ class LocalStream:
                         logger.info(
                             "role=%s content=%s",
                             msg.get("role"),
-                            content if len(content) < 500 else content[:500] + "…",
+                            content if len(content) < 500 else content[:500] + "...",
                         )
 
             elif isinstance(handler_output, tuple):

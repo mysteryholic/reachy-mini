@@ -30,7 +30,7 @@ body {
 }
 
 /* Combined selector beats the single-class `.shell` rule so the console panel
-   actually gets the wider width — gives the 10-column recipe table room. */
+   actually gets the wider width - gives the 10-column recipe table room. */
 .shell.compact-shell {
   width: min(1680px, calc(100vw - 24px));
 }
@@ -584,7 +584,7 @@ td select {
   padding: 6px;
 }
 
-/* Command / Stop columns hold long CLI strings — give their textareas room
+/* Command / Stop columns hold long CLI strings - give their textareas room
    so they stay readable in the widened panel. */
 td textarea {
   width: 100%;
@@ -596,7 +596,7 @@ td textarea {
 
 /* The recipe editor is a CSS grid (auto-fit minmax(210px,1fr)). Without this,
    the terminal table, recipe list, and button row get trapped in a single
-   ~210px grid cell — make them span the full width of the form. */
+   ~210px grid cell - make them span the full width of the form. */
 .compact-recipe > .row,
 .compact-recipe > #recipe-list,
 .compact-recipe > #recipe-terminal-table {
@@ -604,7 +604,7 @@ td textarea {
 }
 
 /* Recipe terminal editor (Order/Terminal/Connection/Type/Command/Mode/Wait/
-   Stop/Required) — 10 cramped columns. Give the table a comfortable minimum
+   Stop/Required) - 10 cramped columns. Give the table a comfortable minimum
    width (the .table-wrap scrolls horizontally when needed), shrink the tiny
    columns, and let the text-heavy ones breathe. */
 #recipe-terminal-table table {
@@ -641,7 +641,7 @@ td textarea {
 #recipe-terminal-table th:nth-child(6),
 #recipe-terminal-table td:nth-child(6) { width: 120px; }
 
-/* Command (5) / Stop (8): the long CLI strings — take the remaining space. */
+/* Command (5) / Stop (8): the long CLI strings - take the remaining space. */
 #recipe-terminal-table th:nth-child(5),
 #recipe-terminal-table td:nth-child(5) { width: 360px; }
 #recipe-terminal-table th:nth-child(8),

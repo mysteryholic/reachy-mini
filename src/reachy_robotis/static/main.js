@@ -23,7 +23,7 @@ async function waitForStatus(timeoutMs = 15000) {
       if (resp.ok) return await resp.json();
     } catch (e) {}
     if (loadingText) {
-      loadingText.textContent = attempts > 8 ? "Starting backend…" : "Loading…";
+      loadingText.textContent = attempts > 8 ? "Starting backend..." : "Loading...";
     }
     if (Date.now() >= deadline) return null;
     await sleep(500);
@@ -143,7 +143,7 @@ async function init() {
       statusEl.textContent = "Key valid! Saving...";
       statusEl.className = "status ok";
       await saveKey(key);
-      statusEl.textContent = "Saved. Reloading…";
+      statusEl.textContent = "Saved. Reloading...";
       statusEl.className = "status ok";
       window.location.reload();
     } catch (e) {

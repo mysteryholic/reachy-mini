@@ -1,6 +1,5 @@
 ---
 title: Reachy Robotis
-emoji: 🤖
 colorFrom: purple
 colorTo: gray
 sdk: docker
@@ -13,57 +12,57 @@ tags:
 
 # Reachy Robotis
 
-Reachy Robotis는 Reachy Mini 대화 앱 위에 ROBOTIS 장비 실행 인터페이스를 얹은 프로젝트입니다. 현재 구현은 단순한 데모 채팅 앱을 넘어, 음성/텍스트/웹 UI 입력을 등록된 액션으로 해석하고 OMX, OMY, AI Worker, HX5 Hand, mock 장비의 워크플로 또는 명령을 실행하는 구조입니다.
+Reachy Robotis extends the Reachy Mini conversation app with a ROBOTIS device execution interface. The current implementation is more than a demo chat app: it accepts voice, text, and web UI input, resolves that input into registered actions, and runs workflows or commands for OMX, OMY, AI Worker, HX5 Hand, and mock devices.
 
-현재의 큰 흐름은 다음과 같습니다.
+The main runtime flow is:
 
 ```text
-사용자 음성 / 텍스트 / 웹 UI
+User voice / text / web UI
   -> Reachy Mini conversation app
-  -> OpenAI 또는 Hugging Face realtime backend
+  -> OpenAI or Hugging Face realtime backend
   -> tool/function calling
   -> ROBOTIS intent resolver
   -> action / recipe / task / command catalog
   -> ActionExecutor
   -> device adapter
-  -> SSH, Docker, ROS 2, HTTP bridge, mock transport
+  -> SSH, Docker, ROS 2, HTTP bridge, or mock transport
 ```
 
-> ⚠️ 보안 경고
+> Security warning
 >
-> 과거 빌드에서 `OPENAI_API_KEY`가 `src/reachy_robotis/.env`에 저장되고 로그나 검색 결과에 원문으로 노출된 적이 있습니다. 이미 노출된 키는 유출된 것으로 간주하고 반드시 폐기 후 재발급하세요: https://platform.openai.com/api-keys
+> An earlier build stored `OPENAI_API_KEY` in `src/reachy_robotis/.env`, and the raw key may have appeared in logs or search results. Treat any exposed key as compromised, revoke it, and create a new key at https://platform.openai.com/api-keys.
 >
-> 현재 구현은 프로젝트 루트의 `.env`를 우선 사용하며, 기존 `src/reachy_robotis/.env`가 발견되면 루트 `.env`로 이관하려고 시도합니다. 로그, API 응답, UI에서는 키를 마스킹합니다. Hugging Face에서 OpenAI 키를 자동으로 가져오는 동작은 기본 비활성화되어 있고, `--allow-hf-key-fetch`를 명시했을 때만 켜집니다.
+> The current implementation prefers the project-root `.env`. If an older `src/reachy_robotis/.env` file is found, the app attempts to migrate it to the root `.env`. Keys are masked in logs, API responses, and UI output. Automatic OpenAI key retrieval from Hugging Face is disabled by default and is only enabled when `--allow-hf-key-fetch` is passed explicitly.
 
-## 현재 구현 요약
+## Current Implementation
 
-- Python 패키지 이름은 `reachy_robotis`이고, CLI 엔트리포인트는 `reachy-robotis`입니다.
-- 기본 앱은 Reachy Mini SDK의 `ReachyMini` 객체를 생성하고, `MovementManager`, `HeadWobbler`, camera worker, vision manager, realtime handler를 조립합니다.
-- Gradio/FastAPI 기반 웹 모드에서는 `/chat`에 대화/음성 인터페이스를, `/robotis`에 ROBOTIS 제품 런처와 실행 API를 마운트합니다.
-- headless 모드에서도 FastAPI settings app이 있으면 `/robotis` API와 패널을 붙이고, 로컬 오디오 스트림으로 Reachy Mini 마이크/스피커와 realtime backend를 연결합니다.
-- ROBOTIS 실행 계층은 `TaskCatalog`, `CommandCatalog`, `ActionCatalog`, `RecipeCatalog`, `ConnectionRegistry`, `DeviceRegistry`, `TerminalSessionManager`, `ActionExecutor`로 나뉘어 있습니다.
-- 장비별 어댑터는 `reachy`, `omx`, `omy`, `ai_worker`, `mock`을 지원합니다.
-- 트랜스포트는 local/mock 외에 SSH, SSH+Docker, WebSocket, HTTP, OMX bridge 계층이 구현되어 있습니다.
-- 설정과 워크플로는 YAML 파일로 정의되며, 웹 UI에서 일부 연결 정보와 워크플로를 저장/갱신할 수 있습니다.
-- 테스트는 pytest 기반으로 connection registry, external loading, OpenAI realtime, background tool manager, audio head wobble, vision processor를 다룹니다.
+- The Python package is `reachy_robotis`, and the CLI entrypoint is `reachy-robotis`.
+- The main app creates a Reachy Mini SDK `ReachyMini` object and wires together `MovementManager`, `HeadWobbler`, the camera worker, the vision manager, and the realtime handler.
+- In Gradio/FastAPI web mode, `/chat` serves the conversation and voice UI, while `/robotis` serves the ROBOTIS product launcher and execution API.
+- In headless mode, the app can still mount the `/robotis` API and panel on the FastAPI settings app while connecting the Reachy Mini microphone and speaker to the realtime backend through the local audio stream.
+- The ROBOTIS execution layer is split into `TaskCatalog`, `CommandCatalog`, `ActionCatalog`, `RecipeCatalog`, `ConnectionRegistry`, `DeviceRegistry`, `TerminalSessionManager`, and `ActionExecutor`.
+- Device adapters support `reachy`, `omx`, `omy`, `ai_worker`, and `mock`.
+- Transports include local/mock execution, SSH, SSH+Docker, WebSocket, HTTP, and the OMX bridge.
+- Configuration and workflows are defined in YAML files. The web UI can save or update selected connection settings and workflows.
+- Tests cover the connection registry, external loading, OpenAI realtime handling, background tool management, audio head wobble behavior, and vision processors.
 
-## 설치
+## Installation
 
-이 저장소는 `uv` 사용을 전제로 합니다.
+This repository is designed to use `uv`.
 
 ```bash
 uv sync
 ```
 
-아래 실행 예시는 모두 `uv run ...` 형태로 적었습니다. `.venv`를 직접 활성화한 상태라면 앞의 `uv run`은 생략해도 됩니다.
+The commands below use `uv run ...`. If you already activated `.venv` directly, you can omit the `uv run` prefix.
 
-개발 도구까지 설치하려면 다음 의존성 그룹을 사용합니다.
+Install development dependencies with:
 
 ```bash
 uv sync --group dev
 ```
 
-선택 vision backend가 필요하면 pyproject의 extra를 설치합니다.
+Install optional vision backends with the extras defined in `pyproject.toml`:
 
 ```bash
 uv sync --extra local_vision
@@ -72,55 +71,55 @@ uv sync --extra mediapipe_vision
 uv sync --extra all_vision
 ```
 
-## 환경 변수
+## Environment Variables
 
-루트 `.env` 또는 쉘 환경변수로 설정합니다.
+Configure the app through the project-root `.env` file or shell environment variables.
 
 ```bash
 cp .env.example .env
 ```
 
-주요 값은 다음과 같습니다.
+Important values:
 
-- `BACKEND_PROVIDER`: `huggingface` 또는 `openai`. 기본값은 `huggingface`입니다.
-- `OPENAI_API_KEY`: `BACKEND_PROVIDER=openai`일 때 필요합니다.
-- `HF_TOKEN`: Hugging Face realtime backend 사용 시 필요할 수 있습니다. `hf auth login`으로도 설정할 수 있습니다.
-- `MODEL_NAME`: OpenAI backend에서 사용할 realtime 모델입니다. 기본값은 `gpt-realtime`입니다.
-- `LOCAL_VISION_MODEL`: `--local-vision` 사용 시 로컬 vision 모델입니다. 기본값은 `HuggingFaceTB/SmolVLM2-2.2B-Instruct`입니다.
-- `ROBOTIS_CLI_DRY_RUN`: `1`이면 실제 명령 대신 dry-run 성격으로 실행합니다. `0`이면 dry-run을 끕니다.
-- `GRADIO_SERVER_NAME`, `GRADIO_SERVER_PORT`: 웹 서버 host/port를 바꿉니다. 기본 port는 `7860`입니다.
-- `REACHY_MINI_SKIP_DOTENV`: `.env` 자동 로딩을 건너뜁니다.
-- `REACHY_MINI_EXTERNAL_PROFILES_DIRECTORY`, `REACHY_MINI_EXTERNAL_TOOLS_DIRECTORY`, `AUTOLOAD_EXTERNAL_TOOLS`: 외부 personality/tool 로딩에 사용합니다.
+- `BACKEND_PROVIDER`: `huggingface` or `openai`. The default is `huggingface`.
+- `OPENAI_API_KEY`: Required when `BACKEND_PROVIDER=openai`.
+- `HF_TOKEN`: May be required for the Hugging Face realtime backend. You can also configure it with `hf auth login`.
+- `MODEL_NAME`: Realtime model used by the OpenAI backend. The default is `gpt-realtime`.
+- `LOCAL_VISION_MODEL`: Local vision model used with `--local-vision`. The default is `HuggingFaceTB/SmolVLM2-2.2B-Instruct`.
+- `ROBOTIS_CLI_DRY_RUN`: Set to `1` to avoid real command execution, or `0` to allow live execution.
+- `GRADIO_SERVER_NAME`, `GRADIO_SERVER_PORT`: Web server host and port. The default port is `7860`.
+- `REACHY_MINI_SKIP_DOTENV`: Skip automatic `.env` loading.
+- `REACHY_MINI_EXTERNAL_PROFILES_DIRECTORY`, `REACHY_MINI_EXTERNAL_TOOLS_DIRECTORY`, `AUTOLOAD_EXTERNAL_TOOLS`: Configure external personality and tool loading.
 
-## 실행
+## Running
 
-시뮬레이터 또는 실제 Reachy Mini daemon이 먼저 필요합니다.
+Start a simulator or a real Reachy Mini daemon first.
 
 ```bash
 uv run reachy-mini-daemon --sim
 ```
 
-웹 UI를 실행합니다.
+Start the web UI:
 
 ```bash
 uv run reachy-robotis --gradio
 ```
 
-브라우저에서 다음 주소를 사용합니다.
+Open these URLs in a browser:
 
-- `http://localhost:7860/chat`: Reachy Mini 음성/채팅 인터페이스
-- `http://localhost:7860/robotis`: ROBOTIS 제품 런처
-- `http://localhost:7860/robotis/health`: 상태 확인 API
+- `http://localhost:7860/chat`: Reachy Mini voice and chat interface
+- `http://localhost:7860/robotis`: ROBOTIS product launcher
+- `http://localhost:7860/robotis/health`: Health check API
 
-headless 모드는 다음처럼 실행합니다.
+Run in headless mode with:
 
 ```bash
 uv run reachy-robotis
 ```
 
-시뮬레이션 상태가 감지되고 `--gradio`가 없으면 앱이 Gradio 모드를 자동으로 켭니다.
+If simulation mode is detected and `--gradio` is not provided, the app automatically enables Gradio mode.
 
-자주 쓰는 옵션은 다음과 같습니다.
+Common options:
 
 ```bash
 uv run reachy-robotis --gradio --debug
@@ -128,15 +127,15 @@ uv run reachy-robotis --no-camera
 uv run reachy-robotis --head-tracker yolo
 uv run reachy-robotis --head-tracker mediapipe
 uv run reachy-robotis --local-vision
-uv run reachy-robotis --robot-name <daemon과-같은-robot-name>
+uv run reachy-robotis --robot-name <same-name-as-the-daemon>
 uv run reachy-robotis --allow-hf-key-fetch
 ```
 
-종료는 `Ctrl+C`입니다. 종료 시 movement manager, head wobbler, camera worker, vision manager를 멈추고 robot media/client 연결을 닫습니다.
+Stop the app with `Ctrl+C`. During shutdown, the app stops the movement manager, head wobbler, camera worker, and vision manager, then closes the robot media/client connections.
 
 ## CLI
 
-`src/reachy_robotis/main.py`는 일부 하위 명령을 먼저 처리합니다.
+`src/reachy_robotis/main.py` handles a few subcommands before normal app startup.
 
 ```bash
 uv run reachy-robotis list-tasks
@@ -146,7 +145,7 @@ uv run reachy-robotis chat
 uv run reachy-robotis --help
 ```
 
-`chat` 모드는 음성 없이 텍스트로 등록된 task trigger나 task name을 실행해 보는 용도입니다.
+The `chat` mode is a text-only way to test registered task triggers or task names without voice.
 
 ```text
 >> list
@@ -157,40 +156,40 @@ uv run reachy-robotis --help
 >> exit
 ```
 
-주의: `test-task`는 현재 실제 로봇 실행기라기보다 작업 내용을 미리 보여주는 preview 성격입니다. `device`가 `mock`이 아니면 실제 움직임 가능성을 경고합니다.
+Note: `test-task` is currently a preview helper rather than a live robot executor. If the task device is not `mock`, it warns that real motion may be possible.
 
-## 웹 UI
+## Web UI
 
 ### `/chat`
 
-Realtime 대화 UI입니다. 현재 구현은 FastRTC `Stream`과 `OpenaiRealtimeHandler`를 사용합니다.
+This is the realtime conversation UI. The current implementation uses FastRTC `Stream` and `OpenaiRealtimeHandler`.
 
-- 음성 입출력
-- 텍스트 채팅 주입
-- 대화 transcript 저장
-- text chat 중 오디오 입력 mute 처리
-- Hugging Face backend는 16 kHz PCM, OpenAI backend는 24 kHz PCM으로 샘플레이트를 맞춤
-- tool/function calling을 통해 Reachy Mini tool과 ROBOTIS tool 실행
-- Gradio personality UI 연결
+- Voice input and output
+- Text chat injection
+- Conversation transcript storage
+- Audio input mute while text chat is active
+- 16 kHz PCM for the Hugging Face backend and 24 kHz PCM for the OpenAI backend
+- Reachy Mini and ROBOTIS tool execution through tool/function calling
+- Gradio personality UI integration
 
 ### `/robotis`
 
-ROBOTIS 제품/워크플로 런처입니다.
+This is the ROBOTIS product and workflow launcher.
 
-- 제품 카드 기반 런처
-- 연결 정보 저장
-- 연결 테스트
-- workflow 실행/정지
-- 마지막 실행 결과와 stdout/stderr tail 표시
-- 전체 stop
-- WebSocket 기반 1초 주기 상태 갱신
-- camera snapshot/object detection API
-- task 저장/삭제/export API
-- recipe 저장/삭제/실행/정지 API
-- connection profile 조회/저장/테스트 API
-- device별 allowlist command 실행 API
+- Product launcher with a simplified product selector
+- Connection setting save flow
+- Connection test flow
+- Workflow start/stop controls
+- Last result view with stdout/stderr tails
+- Global stop
+- WebSocket status refresh every second
+- Camera live stream and object detection API
+- Task save/delete/export API
+- Recipe save/delete/run/stop API
+- Connection profile read/save/test API
+- Device-specific allowlisted command execution API
 
-현재 UI의 주요 API는 다음과 같습니다.
+Main API surface:
 
 ```text
 GET    /robotis/health
@@ -218,37 +217,39 @@ POST   /robotis/sessions/{session_id}/stop
 GET    /robotis/camera/status
 GET    /robotis/camera/snapshot
 GET    /robotis/camera/detections
+POST   /robotis/camera/detections/refresh
+POST   /robotis/camera/detections/warmup
 WS     /robotis/ws
 WS     /robotis/omx/teleop
 WS     /robotis/omx/task
 ```
 
-## ROBOTIS 실행 구조
+## ROBOTIS Execution Architecture
 
-ROBOTIS 쪽 실행은 `get_robotis_executor()`에서 한 번 조립되는 process-wide executor가 담당합니다.
+ROBOTIS execution is handled by the process-wide executor assembled by `get_robotis_executor()`.
 
-구성 요소:
+Core components:
 
-- `DeviceRegistry`: `config/robotis_devices.yaml`을 읽어 장비별 mode, host, user, container, allowlisted command를 관리합니다.
-- `ConnectionRegistry`: `config/robotis_connections.yaml`의 SSH/Docker 연결 프로필을 관리합니다. API 응답에는 비밀값을 노출하지 않습니다.
-- `TaskCatalog`: `tasks/*.yaml`의 수동 task를 로드합니다.
-- `CommandCatalog`: 등록 command를 로드합니다.
-- `ActionCatalog`: `config/robotis_actions.yaml`의 trigger 기반 action을 로드합니다.
-- `RecipeCatalog`: `config/robotis_recipes.yaml`의 multi-terminal workflow를 로드합니다.
-- `ProductPresetCatalog`: `config/robotis_product_presets.yaml`의 제품 프리셋을 설치하고 action/recipe/connection을 보강합니다.
-- `TerminalSessionManager`: recipe의 terminal들을 start order 순서로 실행하고, stop 시 역순으로 정지합니다.
-- `IntentResolver`: 사용자 문장을 task, command, action, recipe trigger로 해석합니다.
-- `ActionExecutor`: 해석 결과를 실제 adapter와 transport로 dispatch합니다.
+- `DeviceRegistry`: Loads `config/robotis_devices.yaml` and manages each device mode, host, user, container, and allowlisted commands.
+- `ConnectionRegistry`: Manages SSH/Docker connection profiles from `config/robotis_connections.yaml`. Secret values are never exposed in API responses.
+- `TaskCatalog`: Loads manual tasks from `tasks/*.yaml`.
+- `CommandCatalog`: Loads registered commands.
+- `ActionCatalog`: Loads trigger-based actions from `config/robotis_actions.yaml`.
+- `RecipeCatalog`: Loads multi-terminal workflows from `config/robotis_recipes.yaml`.
+- `ProductPresetCatalog`: Installs product presets from `config/robotis_product_presets.yaml` and enriches actions, recipes, and connections.
+- `TerminalSessionManager`: Starts recipe terminals in `start_order` order and stops them in reverse order.
+- `IntentResolver`: Resolves user text into task, command, action, or recipe triggers.
+- `ActionExecutor`: Dispatches resolved work to the actual adapter and transport.
 
-지원 adapter:
+Supported adapters:
 
-- `ReachyAdapter`: Reachy Mini conversation app 쪽 동작
-- `OMXAdapter`: OMX task, bridge, teleop, command 실행
-- `OMYAdapter`: OMY Raspberry Pi/ROS workflow 실행
-- `AIWorkerAdapter`: Jetson Orin AI Worker workflow 실행
-- `MockAdapter`: 실제 하드웨어 없는 테스트 흐름
+- `ReachyAdapter`: Reachy Mini conversation app actions
+- `OMXAdapter`: OMX tasks, bridge, teleoperation, and command execution
+- `OMYAdapter`: OMY Raspberry Pi and ROS workflow execution
+- `AIWorkerAdapter`: Jetson Orin AI Worker workflow execution
+- `MockAdapter`: Test flow without real hardware
 
-지원 transport:
+Supported transports:
 
 - `MockTransport`
 - `CLITransport`
@@ -259,39 +260,39 @@ ROBOTIS 쪽 실행은 `get_robotis_executor()`에서 한 번 조립되는 proces
 - `WebSocketTransport`
 - `OMXBridgeTransport`
 
-## 설정 파일
+## Configuration Files
 
-현재 핵심 설정은 `src/reachy_robotis/config/` 아래에 있습니다.
+The main configuration files live under `src/reachy_robotis/config/`.
 
 ```text
-robotis_devices.yaml          장비별 기본 mode, host, user, container, command allowlist
-robotis_connections.yaml      SSH/Docker 연결 프로필
-robotis_actions.yaml          음성/텍스트 trigger -> action 매핑
-robotis_recipes.yaml          multi-terminal workflow 정의
-robotis_product_presets.yaml  제품 카드, 기본 연결, workflow preset
-robotis_commands.yaml         command catalog
-robotis_omy_raspberry_pi.yaml OMY 관련 별도 설정
-robotis_ai_worker_jetson.yaml AI Worker 관련 별도 설정
+robotis_devices.yaml          Default device mode, host, user, container, and command allowlist
+robotis_connections.yaml      SSH/Docker connection profiles
+robotis_actions.yaml          Voice/text trigger to action mappings
+robotis_recipes.yaml          Multi-terminal workflow definitions
+robotis_product_presets.yaml  Product cards, default connections, and workflow presets
+robotis_commands.yaml         Command catalog
+robotis_omy_raspberry_pi.yaml OMY-specific settings
+robotis_ai_worker_jetson.yaml AI Worker-specific settings
 ```
 
-기본 YAML에는 개발 환경에서 쓰던 IP, 사용자명, container 이름이 들어 있습니다. 실제 장비에서는 `/robotis` UI에서 연결 정보를 저장하거나 YAML을 환경에 맞게 수정해야 합니다.
+The default YAML files include development IP addresses, usernames, and container names. For real devices, save connection settings through the `/robotis` UI or edit the YAML files for your network.
 
-## 제품 프리셋
+## Product Presets
 
-현재 `robotis_product_presets.yaml`에는 다음 제품군이 정의되어 있습니다.
+`robotis_product_presets.yaml` currently defines these product groups:
 
-- `omx`: OMX bringup, MoveIt, GUI, demo rosbag workflow
-- `omy`: OMY AI teleoperation, MoveIt, GUI, demo rosbag workflow
-- `ai_worker`: AI Worker BG2/SG2 workflow
+- `omx`: OMX bringup, MoveIt, GUI, and demo rosbag workflows
+- `omy`: OMY AI teleoperation, MoveIt, GUI, and demo rosbag workflows
+- `ai_worker`: AI Worker BG2/SG2 workflows
 - `hx5_hand`: HX5 Hand container start workflow
 
-프리셋은 connection, Docker mode, ROS distro/setup, workflow terminal 목록을 함께 제공합니다. `/robotis` UI의 제품 카드에서 host/user/auth를 저장하면 해당 connection profile과 product state가 갱신됩니다.
+Presets provide connection settings, Docker mode, ROS distro/setup paths, and workflow terminal lists. When host/user/auth settings are saved from the `/robotis` UI, the matching connection profile and product state are updated.
 
-## Task, Action, Recipe 차이
+## Task, Action, and Recipe
 
 ### Task
 
-Task는 단계 기반 로봇 동작입니다. 예시는 `src/reachy_robotis/tasks/omx_tasks.yaml`의 `push_box_custom`입니다.
+A task is a step-based robot behavior. One example is `push_box_custom` in `src/reachy_robotis/tasks/omx_tasks.yaml`.
 
 ```yaml
 {
@@ -306,13 +307,13 @@ Task는 단계 기반 로봇 동작입니다. 예시는 `src/reachy_robotis/task
 }
 ```
 
-지원되는 대표 step은 `move_l`, `gripper`, `wait`, `say`입니다.
+Common step types include `move_l`, `gripper`, `wait`, and `say`.
 
 ### Action
 
-Action은 사용자 trigger와 실행 방법을 연결합니다. `robotis_actions.yaml`에서 정의합니다.
+An action connects user-facing triggers to an execution method. Actions are defined in `robotis_actions.yaml`.
 
-실행 method 예시:
+Example execution methods:
 
 - `start_recipe`
 - `stop_recipe`
@@ -323,43 +324,45 @@ Action은 사용자 trigger와 실행 방법을 연결합니다. `robotis_action
 
 ### Recipe
 
-Recipe는 하나 이상의 terminal command를 실행하는 workflow입니다. 각 terminal에는 `connection_id`, `command_type`, `command`, `run_mode`, `start_order`, `wait_after_start_sec`, `stop_command`가 들어갑니다.
+A recipe runs one or more terminal commands as a workflow. Each terminal entry includes `connection_id`, `command_type`, `command`, `run_mode`, `start_order`, `wait_after_start_sec`, and `stop_command`.
 
-`run_mode`는 foreground 또는 detached 형태로 쓰이며, stop은 recipe terminal의 역순으로 수행됩니다.
+`run_mode` can be foreground or detached. Stop operations run recipe terminals in reverse order.
 
-## Command 실행과 안전장치
+## Command Execution and Safety
 
-- 웹 UI/API에서 임의 shell command를 직접 실행하는 것이 아니라 YAML에 등록된 allowlisted command key 또는 recipe terminal command를 실행합니다.
-- `ConnectionRegistry`는 password/key 정보를 API 응답에서 숨깁니다.
-- product connection 저장 시 host/user/auth/key_path가 UI 상태와 round-trip되는지 확인합니다.
-- connection test는 TCP, SSH, container, ROS 단계로 나뉩니다.
-- device별 stop, torque-off, kill, global stop API가 있습니다.
-- `ROBOTIS_CLI_DRY_RUN`과 장비별 `dry_run` 설정으로 실제 실행 여부를 제어합니다.
+- The web UI and API do not execute arbitrary shell commands directly. They execute allowlisted command keys from YAML or recipe terminal commands.
+- `ConnectionRegistry` hides password and key values in API responses.
+- Product connection saving verifies that host/user/auth/key_path values round-trip through the UI state.
+- Connection testing is split into TCP, SSH, container, and ROS checks.
+- Device stop, torque-off, kill, and global stop APIs are available.
+- `ROBOTIS_CLI_DRY_RUN` and per-device `dry_run` settings control whether real execution is allowed.
 
-## Camera와 Vision
+## Camera and Vision
 
-카메라는 `--no-camera`가 없을 때 `CameraWorker`로 초기화됩니다.
+The camera is initialized through `CameraWorker` unless `--no-camera` is passed.
 
 - `--head-tracker yolo`: `reachy_robotis.vision.yolo_head_tracker.HeadTracker`
 - `--head-tracker mediapipe`: `reachy_mini_toolbox.vision.HeadTracker`
-- `--local-vision`: 로컬 vision manager 초기화
-- 기본 vision 설명은 gpt-realtime vision 사용으로 로그에 남습니다.
+- `--local-vision`: Initialize the local vision manager
+- Realtime vision description uses the configured realtime vision backend when available
 
-`/robotis/camera/snapshot`은 최신 프레임에 object detection bounding box를 그려 JPEG로 반환합니다. `/robotis/camera/detections`는 마지막 snapshot inference 결과를 JSON으로 반환합니다.
+`/robotis/camera/stream` returns an MJPEG live stream with detection overlays. `/robotis/camera/snapshot` returns the latest frame as a JPEG with object detection boxes. `/robotis/camera/detections` returns the latest detection result as JSON.
 
-## Personality와 Tool 로딩
+The chat agent also exposes `detect_objects`, a tool that runs the same object detection pipeline on the latest camera frame. It returns labels, confidence scores, bounding boxes, normalized centers, and relative positions so the assistant can answer questions such as what it sees or where an object is located.
 
-현재 `LOCKED_PROFILE`은 `_reachy_robotis_locked_profile`로 설정되어 있습니다. 따라서 기본적으로 내장 locked profile의 instructions와 tools를 사용합니다.
+## Personality and Tool Loading
 
-tool 로딩 흐름:
+`LOCKED_PROFILE` is currently set to `_reachy_robotis_locked_profile`, so the app uses the built-in locked profile instructions and tools by default.
 
-- profile의 `tools.txt`를 읽습니다.
-- `SystemTool`에 정의된 시스템 tool을 추가합니다.
-- profile module에서 먼저 찾고, 없으면 `reachy_robotis.tools`에서 찾습니다.
-- 외부 tools directory와 `AUTOLOAD_EXTERNAL_TOOLS`가 설정되어 있으면 추가 tool을 자동 로드할 수 있습니다.
-- 외부 profile/tool 이름이 내장 이름과 충돌하면 명시적인 오류를 냅니다.
+Tool loading flow:
 
-대표 tool 파일:
+- Read `tools.txt` from the active profile.
+- Add system tools defined in `SystemTool`.
+- Look for the tool in the profile module first, then fall back to `reachy_robotis.tools`.
+- If an external tools directory and `AUTOLOAD_EXTERNAL_TOOLS` are configured, automatically load extra tools.
+- Raise an explicit error when an external profile or tool name conflicts with a built-in name.
+
+Representative tool files:
 
 ```text
 tools/run_robotis_action.py
@@ -368,6 +371,7 @@ tools/list_robotis_actions.py
 tools/list_robot_commands.py
 tools/list_robot_connections.py
 tools/test_robot_connection.py
+tools/detect_objects.py
 tools/task_status.py
 tools/task_cancel.py
 tools/move_head.py
@@ -376,42 +380,42 @@ tools/camera.py
 tools/dance.py
 ```
 
-## 코드 구조
+## Code Structure
 
 ```text
 src/reachy_robotis/
-  main.py                         앱/CLI 엔트리포인트
-  cli.py                          task CLI와 text-only chat mode
-  config.py                       env, backend, profile, tool 경로 설정
-  openai_realtime.py              realtime 음성/텍스트 handler
-  console.py                      headless LocalStream과 settings API
+  main.py                         App and CLI entrypoint
+  cli.py                          Task CLI and text-only chat mode
+  config.py                       Environment, backend, profile, and tool path settings
+  openai_realtime.py              Realtime voice/text handler
+  console.py                      Headless LocalStream and settings API
   gradio_personality.py           Gradio personality UI
-  headless_personality*.py        headless personality 저장/적용 API
+  headless_personality*.py        Headless personality save/apply API
   camera_worker.py                Reachy camera frame worker
   moves.py                        Reachy movement manager
-  audio/                          speech tapper, head wobbler
-  vision/                         object detector, processors, YOLO tracker
-  tools/                          function-calling tool 구현
-  profiles/                       built-in locked profile
-  config/                         ROBOTIS YAML 설정
-  tasks/                          task YAML
-  static/                         chat/settings frontend
+  audio/                          Speech tapper and head wobbler
+  vision/                         Object detector, processors, and YOLO tracker
+  tools/                          Function-calling tool implementations
+  profiles/                       Built-in locked profile
+  config/                         ROBOTIS YAML settings
+  tasks/                          Task YAML files
+  static/                         Chat/settings frontend
   robotis_interface/
-    adapters/                     장비별 adapter
-    core/                         catalog, resolver, executor, registry, session manager
-    transports/                   CLI/SSH/Docker/HTTP/WebSocket/mock transport
-    web/                          /robotis FastAPI routes와 static panel
+    adapters/                     Device-specific adapters
+    core/                         Catalogs, resolver, executor, registry, and session manager
+    transports/                   CLI/SSH/Docker/HTTP/WebSocket/mock transports
+    web/                          /robotis FastAPI routes and static panel
 ```
 
-## 테스트
+## Tests
 
-현재 테스트는 `tests/` 아래에 있습니다.
+Tests live under `tests/`.
 
 ```bash
 uv run pytest
 ```
 
-개별 테스트 예시:
+Individual examples:
 
 ```bash
 uv run pytest tests/test_connection_registry.py
@@ -420,17 +424,17 @@ uv run pytest tests/tools/test_background_tool_manager.py
 uv run pytest tests/vision/test_processors.py
 ```
 
-정적 검사 도구는 pyproject에 설정되어 있습니다.
+Static checks are configured in `pyproject.toml`.
 
 ```bash
 uv run ruff check src tests
 uv run mypy
 ```
 
-## 현재 주의할 점
+## Current Notes
 
-- 이 프로젝트는 완성된 범용 multi-robot framework라기보다 Reachy Mini 앱에서 ROBOTIS 장비 workflow를 실행하기 위한 통합 인터페이스입니다.
-- 실제 VLA 모델을 학습하거나 배포하지 않습니다. 등록된 trigger, task, action, recipe, command를 해석하고 실행합니다.
-- 기본 장비 설정에는 개발용 IP와 container 이름이 들어 있으므로 실제 네트워크에 맞게 수정해야 합니다.
-- `docs/` 디렉터리는 현재 저장소에 없습니다. 예전 README에 있던 `docs/TASKS.md`, `docs/EXTENDING.md`, `docs/DEMO_SCRIPT.md` 링크는 현재 구현 상태와 맞지 않아 제거했습니다.
-- 실제 로봇 연결에서 `dry_run`을 끄면 SSH/Docker/ROS 명령과 로봇 움직임이 실행될 수 있습니다. 장비 주변 안전을 먼저 확인하세요.
+- This project is an integrated interface for running ROBOTIS device workflows from the Reachy Mini app. It is not intended to be a complete general-purpose multi-robot framework.
+- It does not train or deploy a real VLA model. It resolves and executes registered triggers, tasks, actions, recipes, and commands.
+- Default device settings include development IP addresses and container names. Update them for your real network.
+- The `docs/` directory is not present in the current repository. Old README links to `docs/TASKS.md`, `docs/EXTENDING.md`, and `docs/DEMO_SCRIPT.md` were removed because they no longer match the current implementation.
+- Disabling `dry_run` on real robot connections may execute SSH, Docker, ROS, and robot motion commands. Verify physical safety around the devices before running live actions.

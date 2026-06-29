@@ -153,14 +153,14 @@ def _load_profile_tools() -> None:
             )
             tools_txt_path = default_tools_txt_path
         else:
-            logger.error(f"✗ tools.txt not found at {tools_txt_path}")
+            logger.error(f"tools.txt not found at {tools_txt_path}")
             sys.exit(1)
 
     try:
         with open(tools_txt_path, "r") as f:
             lines = f.readlines()
     except Exception as e:
-        logger.error(f"✗ Failed to read tools.txt: {e}")
+        logger.error(f"Failed to read tools.txt: {e}")
         sys.exit(1)
 
     tool_names = []
@@ -207,18 +207,18 @@ def _load_profile_tools() -> None:
                 file_subpath=f"{profile}/{tool_name}.py",
             )
             if source == "file":
-                logger.info("✓ Loaded external profile tool: %s", tool_name)
+                logger.info("Loaded external profile tool: %s", tool_name)
             else:
-                logger.info("✓ Loaded core profile tool: %s", tool_name)
+                logger.info("Loaded core profile tool: %s", tool_name)
             loaded = True
         except (ModuleNotFoundError, FileNotFoundError) as e:
             if tool_name not in str(e):
                 profile_error = _format_error(e)
-                logger.error(f"❌ Failed to load profile tool '{tool_name}': {profile_error}")
+                logger.error(f"Failed to load profile tool '{tool_name}': {profile_error}")
                 logger.error(f"  Module path: {profile_import_path}")
         except Exception as e:
             profile_error = _format_error(e)
-            logger.error(f"❌ Failed to load profile tool '{tool_name}': {profile_error}")
+            logger.error(f"Failed to load profile tool '{tool_name}': {profile_error}")
             logger.error(f"  Module path: {profile_import_path}")
 
         if not loaded:
@@ -231,16 +231,16 @@ def _load_profile_tools() -> None:
                     file_subpath=f"{tool_name}.py",
                 )
                 if source == "file":
-                    logger.info("✓ Loaded external tool: %s", tool_name)
+                    logger.info("Loaded external tool: %s", tool_name)
                 else:
-                    logger.info("✓ Loaded core tool: %s", tool_name)
+                    logger.info("Loaded core tool: %s", tool_name)
             except (ModuleNotFoundError, FileNotFoundError):
                 if profile_error:
-                    logger.error(f"❌ Tool '{tool_name}' also not found in shared tools")
+                    logger.error(f"Tool '{tool_name}' also not found in shared tools")
                 else:
-                    logger.warning(f"⚠️ Tool '{tool_name}' not found in profile or shared tools")
+                    logger.warning(f"Tool '{tool_name}' not found in profile or shared tools")
             except Exception as e:
-                logger.error(f"❌ Failed to load shared tool '{tool_name}': {_format_error(e)}")
+                logger.error(f"Failed to load shared tool '{tool_name}': {_format_error(e)}")
                 logger.error(f"  Module path: {shared_module_path}")
 
 

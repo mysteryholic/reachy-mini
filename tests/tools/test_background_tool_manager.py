@@ -493,7 +493,7 @@ class TestStartUp:
         callback = AsyncMock()
         manager.start_up(tool_callbacks=[callback])
 
-        # Start a tool and let it complete — the listener should invoke the callback
+        # Start a tool and let it complete - the listener should invoke the callback
         routine = _make_routine("ping")
         await manager.start_tool("c1", routine, is_idle_tool_call=False)
         await asyncio.sleep(0.1)

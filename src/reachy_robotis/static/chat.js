@@ -20,7 +20,7 @@
 
   function renderMode() {
     if (modeBtn) modeBtn.textContent = mode === "only_chatting" ? "Chatting only (voice off)" : "Hybrid (voice + text)";
-    if (modeHint) modeHint.textContent = mode === "only_chatting" ? "microphone muted — type to talk" : "speak or type";
+    if (modeHint) modeHint.textContent = mode === "only_chatting" ? "microphone muted - type to talk" : "speak or type";
   }
 
   async function setMode(next) {
@@ -54,7 +54,7 @@
 
   function setConn(connected) {
     if (!conn) return;
-    conn.textContent = connected ? "connected" : "waiting for conversation…";
+    conn.textContent = connected ? "connected" : "waiting for conversation...";
   }
 
   async function poll() {
@@ -85,7 +85,7 @@
     const text = (input.value || "").trim();
     if (!text) return;
     input.value = "";
-    status.textContent = "sending…";
+    status.textContent = "sending...";
     try {
       const res = await fetch("/chat/send", {
         method: "POST",
@@ -93,7 +93,7 @@
         body: JSON.stringify({ text }),
       });
       const data = await res.json().catch(() => ({}));
-      status.textContent = data && data.ok ? "" : "No active conversation yet — make sure the app finished starting and the API key is set.";
+      status.textContent = data && data.ok ? "" : "No active conversation yet - make sure the app finished starting and the API key is set.";
     } catch (e) {
       status.textContent = "Failed to send: " + (e && e.message ? e.message : e);
     }

@@ -135,7 +135,7 @@ function renderTerminalLibrary(productId) {
   return productRecipes(productId).flatMap((recipe) =>
     (recipe.terminals || []).map((terminal, index) => `
       <option value="${escapeHtml(`${recipe.recipe_id}::${index}`)}">
-        ${escapeHtml(recipe.display_name)} — ${escapeHtml(terminal.display_name || terminal.terminal_id)}
+        ${escapeHtml(recipe.display_name)} - ${escapeHtml(terminal.display_name || terminal.terminal_id)}
       </option>`),
   ).join("");
 }
@@ -196,7 +196,7 @@ function renderProductCards() {
 
   setText(
     "#product-context",
-    `${selectedProduct.display_name} · connection ${selectedProduct.connection_id || "not configured"}`,
+    `${selectedProduct.display_name} - connection ${selectedProduct.connection_id || "not configured"}`,
   );
 
   container.innerHTML = `

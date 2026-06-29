@@ -98,7 +98,7 @@ def _resample_linear(x: NDArray[np.float32], sr_in: int, sr_out: int) -> NDArray
 
 
 class SwayRollRT:
-    """Feed audio chunks → per-hop sway outputs."""
+    """Feed audio chunks -> per-hop sway outputs."""
 
     def __init__(self, rng_seed: int = 7):
         """Initialize state."""

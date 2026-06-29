@@ -891,7 +891,7 @@ def create_robotis_router(
         return {
             "ok": True,
             "connected": robotis_executor.is_connected(),
-            "status": "🟢 Connected" if robotis_executor.is_connected() else "🔴 Disconnected",
+            "status": "Connected" if robotis_executor.is_connected() else "Disconnected",
         }
 
     @router.post("/tasks")
