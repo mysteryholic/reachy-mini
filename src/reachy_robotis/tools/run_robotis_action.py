@@ -33,11 +33,28 @@ class RunRobotisAction(Tool):
         "required": ["name"],
     }
 
+    def _is_known(self, executor: Any, kind: str, name: str) -> bool:
+        """True only when ``name`` is an exact registered id for ``kind``."""
+        if kind == "action":
+            return executor.action_catalog is not None and executor.action_catalog.get(name) is not None
+        if kind == "recipe":
+            return executor.recipe_catalog is not None and executor.recipe_catalog.get(name) is not None
+        if kind == "task":
+            return executor.task_catalog.get(name) is not None
+        if kind == "command":
+            return executor.command_catalog.get(name) is not None
+        return False
+
     async def __call__(self, deps: ToolDependencies, **kwargs: Any) -> dict[str, Any]:
         executor = get_robotis_executor()
         name = str(kwargs.get("name", ""))
         kind = kwargs.get("kind")
-        if kind:
+        # Only honor an explicit kind when the name is an exact registered id for
+        # it. The model often passes a trigger phrase (e.g. "start AI Worker BG2")
+        # together with a guessed kind="action"; that would otherwise bypass
+        # trigger resolution and fail with unknown_action. Falling back to text
+        # resolution lets the phrase match a registered trigger.
+        if kind and self._is_known(executor, str(kind), name):
             result = await executor.run_action(str(kind), name)
         elif executor.action_catalog is not None and executor.action_catalog.get(name) is not None:
             result = await executor.run_action("action", name)
