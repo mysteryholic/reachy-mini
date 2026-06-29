@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import threading
+import os
 from typing import Any, Dict, List, Optional
 
 import numpy as np
@@ -22,18 +23,19 @@ class ObjectDetector:
 
     def __init__(
         self,
-        model_name: str = "yolo11n.pt",
+        model_name: str | None = None,
         confidence_threshold: float = 0.35,
-        device: str = "cpu",
+        device: str | None = None,
     ) -> None:
-        self.model_name = model_name
+        self.model_name = model_name or os.getenv("REACHY_ROBOTIS_YOLO_MODEL", "yolo11n.pt")
         self.confidence_threshold = confidence_threshold
-        self.device = device
+        self.device = device or os.getenv("REACHY_ROBOTIS_YOLO_DEVICE", "cpu")
 
         self._model: Any = None
         self._lock = threading.Lock()
         self._available: Optional[bool] = None
         self._error: Optional[str] = None
+        self._warmed_up = False
 
     def _ensure_model(self) -> bool:
         """Load the YOLO model once; return True if it is ready to use."""
@@ -61,6 +63,24 @@ class ObjectDetector:
                 self._available = False
                 logger.warning("Object detection unavailable: %s", self._error)
             return self._available
+
+    def warmup(self) -> bool:
+        """Load the model and run one tiny inference to remove first-use latency."""
+        if not self._ensure_model():
+            return False
+        if self._warmed_up:
+            return True
+        try:
+            dummy = np.zeros((96, 96, 3), dtype=np.uint8)
+            with self._lock:
+                self._model(dummy, verbose=False, conf=self.confidence_threshold)
+            self._warmed_up = True
+            logger.info("Object detector warmed up: %s", self.model_name)
+            return True
+        except Exception as exc:  # noqa: BLE001 - warmup failure should not disable detection
+            self._error = f"Detector warmup failed: {exc}"
+            logger.warning("Object detector warmup failed: %s", exc)
+            return False
 
     @property
     def available(self) -> bool:

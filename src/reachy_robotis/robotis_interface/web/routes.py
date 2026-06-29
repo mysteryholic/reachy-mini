@@ -1144,7 +1144,7 @@ def create_robotis_router(
             try:
                 from reachy_robotis.vision.object_detector import get_object_detector
 
-                get_object_detector().available
+                get_object_detector().warmup()
             except Exception as exc:  # noqa: BLE001 - warmup must never break app startup
                 _camera_state["last_error"] = str(exc)
             finally:

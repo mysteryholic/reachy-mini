@@ -517,7 +517,9 @@ function renderDetections(data) {
     : [`${stamp} no objects detected`];
   state.camera.log.unshift(...lines);
   state.camera.log = state.camera.log.slice(0, 80);
-  setText("#detection-log", state.camera.log.join("\n"));
+  const log = $("#detection-log");
+  setText(log, state.camera.log.join("\n"));
+  if (log) log.scrollTop = 0;
 }
 
 function setCameraRunning(running) {

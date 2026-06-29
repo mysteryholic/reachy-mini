@@ -3,7 +3,8 @@ FROM python:3.12-slim
 ENV PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     GRADIO_SERVER_NAME=0.0.0.0 \
-    GRADIO_SERVER_PORT=7860
+    GRADIO_SERVER_PORT=7860 \
+    YOLO_CONFIG_DIR=/app/.ultralytics
 
 WORKDIR /app
 
@@ -21,7 +22,8 @@ COPY src ./src
 COPY index.html style.css ./
 
 RUN python -m pip install --upgrade pip setuptools wheel \
-    && pip install .
+    && pip install ".[yolo_vision]" \
+    && python -c "from ultralytics import YOLO; YOLO('yolo11n.pt')"
 
 EXPOSE 7860
 
