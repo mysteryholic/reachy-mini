@@ -11,7 +11,7 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 from fastapi import APIRouter, FastAPI, WebSocket, WebSocketDisconnect
-from fastapi.responses import HTMLResponse, JSONResponse, Response
+from fastapi.responses import HTMLResponse, JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from reachy_robotis.config import config
@@ -990,10 +990,67 @@ def create_robotis_router(
         """Detect objects on a frame and cache the result for the list view."""
         from reachy_robotis.vision.object_detector import get_object_detector
 
-        detections = get_object_detector().detect(frame)
+        detections = get_object_detector().detect(_camera_frame_to_bgr(frame))
         _camera_state["detections"] = detections
         _camera_state["ts"] = time.monotonic()
         return detections
+
+    def _camera_frame_to_bgr(frame: Any) -> Any:
+        """Normalize Reachy/PIL/numpy camera frames into uint8 BGR for OpenCV."""
+        import cv2
+        import numpy as np
+
+        if frame is None:
+            return None
+
+        array = np.asarray(frame)
+        if array.size == 0:
+            return None
+
+        array = np.squeeze(array)
+
+        if array.ndim == 3 and array.shape[0] in {1, 3, 4} and array.shape[-1] not in {1, 3, 4}:
+            array = np.moveaxis(array, 0, -1)
+
+        if array.dtype != np.uint8:
+            array = array.astype(np.float32, copy=False)
+            finite = np.isfinite(array)
+            if not finite.all():
+                array = np.nan_to_num(array, nan=0.0, posinf=255.0, neginf=0.0)
+            max_value = float(array.max()) if array.size else 0.0
+            min_value = float(array.min()) if array.size else 0.0
+            if max_value <= 1.0 and min_value >= 0.0:
+                array = array * 255.0
+            array = np.clip(array, 0, 255).astype(np.uint8)
+
+        if array.ndim == 2:
+            return cv2.cvtColor(array, cv2.COLOR_GRAY2BGR)
+
+        if array.ndim != 3:
+            return None
+
+        channels = array.shape[-1]
+        if channels == 1:
+            return cv2.cvtColor(array[:, :, 0], cv2.COLOR_GRAY2BGR)
+        if channels == 4:
+            return cv2.cvtColor(array, cv2.COLOR_RGBA2BGR)
+        if channels == 3:
+            # Reachy camera frames are usually RGB; OpenCV drawing/encoding expects BGR.
+            return cv2.cvtColor(array, cv2.COLOR_RGB2BGR)
+        return None
+
+    def _encode_camera_jpeg(frame: Any, detections: list[dict[str, Any]] | None = None) -> bytes | None:
+        """Encode a normalized camera frame as JPEG, optionally drawing detections."""
+        import cv2
+
+        from reachy_robotis.vision.object_detector import get_object_detector
+
+        bgr = _camera_frame_to_bgr(frame)
+        if bgr is None:
+            return None
+        annotated = get_object_detector().annotate(bgr, detections or [])
+        ok, buffer = cv2.imencode(".jpg", annotated, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
+        return buffer.tobytes() if ok else None
 
     @router.get("/camera/status")
     async def camera_status() -> dict[str, Any]:
@@ -1014,10 +1071,6 @@ def create_robotis_router(
     @router.get("/camera/snapshot")
     async def camera_snapshot() -> Response:
         """Return the latest camera frame as JPEG with detection boxes drawn."""
-        import cv2
-
-        from reachy_robotis.vision.object_detector import get_object_detector
-
         if camera_worker is None:
             return Response(status_code=503, content=b"camera worker not running")
         frame = await asyncio.to_thread(camera_worker.get_latest_frame)
@@ -1025,14 +1078,58 @@ def create_robotis_router(
             return Response(status_code=503, content=b"no frame available")
 
         detections = await asyncio.to_thread(_run_detection, frame)
-        annotated = await asyncio.to_thread(get_object_detector().annotate, frame, detections)
-        ok, buffer = cv2.imencode(".jpg", annotated, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
-        if not ok:
+        jpg = await asyncio.to_thread(_encode_camera_jpeg, frame, detections)
+        if jpg is None:
             return Response(status_code=500, content=b"failed to encode frame")
         return Response(
-            content=buffer.tobytes(),
+            content=jpg,
             media_type="image/jpeg",
             headers={"Cache-Control": "no-store"},
+        )
+
+    @router.get("/camera/stream")
+    async def camera_stream() -> StreamingResponse:
+        """Return an MJPEG stream with detection boxes drawn on each frame."""
+        import cv2
+        import numpy as np
+
+        def _placeholder_frame(message: str) -> bytes:
+            frame = np.zeros((480, 854, 3), dtype=np.uint8)
+            cv2.putText(
+                frame,
+                message,
+                (32, 240),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.8,
+                (210, 222, 240),
+                2,
+                cv2.LINE_AA,
+            )
+            ok, buffer = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
+            return buffer.tobytes() if ok else b""
+
+        async def _frames():
+            while True:
+                if camera_worker is None:
+                    jpg = _placeholder_frame("Camera worker is not running")
+                    await asyncio.sleep(0.5)
+                else:
+                    frame = await asyncio.to_thread(camera_worker.get_latest_frame)
+                    if frame is None:
+                        jpg = _placeholder_frame("Waiting for camera frame...")
+                        await asyncio.sleep(0.25)
+                    else:
+                        detections = await asyncio.to_thread(_run_detection, frame)
+                        jpg = await asyncio.to_thread(_encode_camera_jpeg, frame, detections)
+                        if jpg is None:
+                            jpg = _placeholder_frame("Failed to encode camera frame")
+                        await asyncio.sleep(0.15)
+                yield b"--frame\r\nContent-Type: image/jpeg\r\nCache-Control: no-store\r\n\r\n" + jpg + b"\r\n"
+
+        return StreamingResponse(
+            _frames(),
+            media_type="multipart/x-mixed-replace; boundary=frame",
+            headers={"Cache-Control": "no-store, no-cache, must-revalidate", "Pragma": "no-cache"},
         )
 
     @router.get("/camera/detections")

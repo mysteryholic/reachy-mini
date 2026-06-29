@@ -3,7 +3,8 @@ title: Reachy Robotis
 emoji: 🤖
 colorFrom: purple
 colorTo: gray
-sdk: static
+sdk: docker
+app_port: 7860
 pinned: false
 tags:
   - reachy_mini
