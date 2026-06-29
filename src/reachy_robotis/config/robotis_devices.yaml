@@ -154,13 +154,13 @@
         "bringup": {
           "display_name": "AI Worker Bringup",
           "command_type": "container",
-          "command": "ros2 launch ffw_bringup ffw_bg2_ai.launch.py",
+          "command": "ros2 launch ffw_bringup ffw_bg2_follower_ai.launch.py",
           "run_mode": "detached"
         },
         "bringup_bg2": {
           "display_name": "AI Worker BG2 Bringup",
           "command_type": "container",
-          "command": "ros2 launch ffw_bringup ffw_bg2_ai.launch.py",
+          "command": "ros2 launch ffw_bringup ffw_bg2_follower_ai.launch.py",
           "run_mode": "detached"
         },
         "teleop": {

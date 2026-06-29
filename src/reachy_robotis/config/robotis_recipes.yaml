@@ -60,7 +60,7 @@
           "display_name": "AI Worker Bringup",
           "connection_id": "ai_worker_jetson",
           "command_type": "container",
-          "command": "ros2 launch ffw_bringup ffw_bg2_ai.launch.py",
+          "command": "ros2 launch ffw_bringup ffw_bg2_follower_ai.launch.py",
           "run_mode": "detached",
           "start_order": 1,
           "wait_after_start_sec": 0.0,

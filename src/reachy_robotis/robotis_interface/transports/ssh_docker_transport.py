@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import shlex
 import subprocess
 import logging
 from typing import Any
@@ -36,15 +37,25 @@ class SSHDockerTransport:
         self._last_error = ""
 
     def _build_command(self, cmd: str) -> str:
-        """Build full SSH + Docker + ROS 2 setup command."""
+        """Build full SSH + Docker + ROS 2 setup command.
+
+        ``cmd`` may itself contain single quotes (e.g. ``pkill -f 'a|b'``), so each
+        nesting layer is quoted with ``shlex.quote`` rather than naive ``'...'``
+        wrapping, which would otherwise truncate the command at the first inner
+        quote and silently run only a fragment.
+        """
         setup_commands = ""
         if self.ros_setup_paths:
             setup_list = [f"source {path}" for path in self.ros_setup_paths]
             setup_commands = " && ".join(setup_list) + " && "
 
-        docker_cmd = f"docker exec {self.container_name} bash -c '{setup_commands}cd {self.working_directory} && {cmd}'"
+        inner_script = f"{setup_commands}cd {self.working_directory} && {cmd}"
+        docker_cmd = f"docker exec {self.container_name} bash -c {shlex.quote(inner_script)}"
 
-        ssh_cmd = f"ssh -o StrictHostKeyChecking=no -o BatchMode=yes -o ConnectTimeout=5 {self.user}@{self.host} '{docker_cmd}'"
+        ssh_cmd = (
+            "ssh -o StrictHostKeyChecking=no -o BatchMode=yes -o ConnectTimeout=5 "
+            f"{self.user}@{self.host} {shlex.quote(docker_cmd)}"
+        )
 
         return ssh_cmd
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import shlex
 import subprocess
 import logging
 from typing import Any
@@ -41,7 +42,10 @@ class SSHLocalTransport:
 
         full_cmd = f"{setup_commands}cd {self.working_directory} && {cmd}"
 
-        ssh_cmd = f"ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 {self.user}@{self.host} '{full_cmd}'"
+        ssh_cmd = (
+            "ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 "
+            f"{self.user}@{self.host} {shlex.quote(full_cmd)}"
+        )
 
         return ssh_cmd
 
