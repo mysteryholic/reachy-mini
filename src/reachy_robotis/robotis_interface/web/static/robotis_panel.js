@@ -8,6 +8,7 @@ const state = {
   camera: {
     running: false,
     timer: null,
+    fastTimer: null,
     polling: false,
     log: [],
   },
@@ -497,6 +498,8 @@ function renderDetections(data) {
           <span class="detection-conf">${Math.round(det.confidence * 100)}%</span>
           <span class="detection-pos">center ${det.center[0]}, ${det.center[1]}</span>
         </div>`).join("")
+      : data.detecting
+        ? `<span class="muted">Detecting objects...</span>`
       : `<span class="muted">No objects detected in the latest frame.</span>`;
   }
 
@@ -505,6 +508,8 @@ function renderDetections(data) {
     ? detections.map((det) =>
         `${stamp} ${det.label} ${Math.round(det.confidence * 100)}% bbox=[${det.bbox.join(", ")}] center=(${det.center.join(", ")}) size=${det.size[0]}x${det.size[1]}`,
       )
+    : data.detecting
+      ? [`${stamp} detecting objects...`]
     : [`${stamp} no objects detected`];
   state.camera.log.unshift(...lines);
   state.camera.log = state.camera.log.slice(0, 80);
@@ -546,9 +551,26 @@ async function startCamera() {
   image.onerror = () => {
     setText("#camera-status", "Camera stream failed to load. Retrying can help if the camera is still warming up.");
   };
+  let firstFrameDetectionStarted = false;
+  image.onload = () => {
+    if (firstFrameDetectionStarted) return;
+    firstFrameDetectionStarted = true;
+    api("/camera/detections/refresh", { method: "POST", body: JSON.stringify({}) }).catch(() => {});
+  };
   image.src = `/robotis/camera/stream?_=${Date.now()}`;
   setCameraRunning(true);
+  api("/camera/detections/refresh", { method: "POST", body: JSON.stringify({}) }).catch(() => {});
   pollCameraDetections();
+  if (state.camera.fastTimer) clearInterval(state.camera.fastTimer);
+  const fastUntil = Date.now() + 6000;
+  state.camera.fastTimer = setInterval(() => {
+    if (!state.camera.running || Date.now() > fastUntil) {
+      clearInterval(state.camera.fastTimer);
+      state.camera.fastTimer = null;
+      return;
+    }
+    pollCameraDetections();
+  }, 250);
   if (state.camera.timer) clearInterval(state.camera.timer);
   state.camera.timer = setInterval(() => {
     pollCameraDetections();
@@ -557,7 +579,9 @@ async function startCamera() {
 
 function stopCamera() {
   if (state.camera.timer) clearInterval(state.camera.timer);
+  if (state.camera.fastTimer) clearInterval(state.camera.fastTimer);
   state.camera.timer = null;
+  state.camera.fastTimer = null;
   state.camera.polling = false;
   const image = $("#camera-stream");
   if (image) {

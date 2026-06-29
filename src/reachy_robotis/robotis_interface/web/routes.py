@@ -988,12 +988,61 @@ def create_robotis_router(
 
     def _run_detection(frame: Any) -> list[dict[str, Any]]:
         """Detect objects on a frame and cache the result for the list view."""
+        import cv2
+
         from reachy_robotis.vision.object_detector import get_object_detector
 
-        detections = get_object_detector().detect(_camera_frame_to_bgr(frame))
+        bgr = _camera_frame_to_bgr(frame)
+        if bgr is None:
+            detections = []
+        else:
+            height, width = bgr.shape[:2]
+            max_dim = int(os.getenv("REACHY_ROBOTIS_DETECTION_MAX_DIM", "416") or "416")
+            scale = 1.0
+            detection_frame = bgr
+            if max_dim > 0 and max(height, width) > max_dim:
+                scale = max_dim / float(max(height, width))
+                detection_frame = cv2.resize(
+                    bgr,
+                    (max(1, int(width * scale)), max(1, int(height * scale))),
+                    interpolation=cv2.INTER_AREA,
+                )
+            detections = get_object_detector().detect(detection_frame)
+            if scale != 1.0:
+                inverse = 1.0 / scale
+                for det in detections:
+                    det["bbox"] = [int(round(value * inverse)) for value in det.get("bbox", [])]
         _camera_state["detections"] = detections
         _camera_state["ts"] = time.monotonic()
         return detections
+
+    def _start_detection_task(force: bool = False) -> bool:
+        """Kick off a detection pass without blocking the camera stream."""
+        if camera_worker is None:
+            _camera_state["last_error"] = "Camera worker is not running"
+            return False
+        if _camera_state["detecting"]:
+            return False
+        if not force and time.monotonic() - float(_camera_state.get("ts") or 0.0) < 0.5:
+            return False
+        frame = camera_worker.get_latest_frame()
+        if frame is None:
+            _camera_state["last_error"] = "Waiting for camera frame"
+            return False
+        detection_frame = frame.copy() if hasattr(frame, "copy") else frame
+        _camera_state["detecting"] = True
+
+        async def _detect_in_background() -> None:
+            try:
+                await asyncio.to_thread(_run_detection, detection_frame)
+                _camera_state["last_error"] = ""
+            except Exception as exc:  # noqa: BLE001 - camera stream must keep flowing
+                _camera_state["last_error"] = str(exc)
+            finally:
+                _camera_state["detecting"] = False
+
+        asyncio.create_task(_detect_in_background())
+        return True
 
     def _camera_frame_to_bgr(frame: Any) -> Any:
         """Normalize Reachy/PIL/numpy camera frames into uint8 BGR for OpenCV."""
@@ -1136,19 +1185,7 @@ def create_robotis_router(
                     else:
                         now = time.monotonic()
                         if now - float(_camera_state.get("ts") or 0.0) >= 1.0 and not _camera_state["detecting"]:
-                            detection_frame = frame.copy() if hasattr(frame, "copy") else frame
-                            _camera_state["detecting"] = True
-
-                            async def _detect_in_background() -> None:
-                                try:
-                                    await asyncio.to_thread(_run_detection, detection_frame)
-                                    _camera_state["last_error"] = ""
-                                except Exception as exc:  # noqa: BLE001 - camera stream must keep flowing
-                                    _camera_state["last_error"] = str(exc)
-                                finally:
-                                    _camera_state["detecting"] = False
-
-                            asyncio.create_task(_detect_in_background())
+                            _start_detection_task(force=True)
 
                         detections = _camera_state["detections"]
                         jpg = await asyncio.to_thread(_encode_camera_jpeg, frame, detections)
@@ -1162,6 +1199,17 @@ def create_robotis_router(
             media_type="multipart/x-mixed-replace; boundary=frame",
             headers={"Cache-Control": "no-store, no-cache, must-revalidate", "Pragma": "no-cache"},
         )
+
+    @router.post("/camera/detections/refresh")
+    async def camera_detections_refresh() -> dict[str, Any]:
+        """Start object detection on the latest frame without waiting for it."""
+        started = _start_detection_task(force=True)
+        return {
+            "ok": True,
+            "started": started,
+            "detecting": bool(_camera_state.get("detecting")),
+            "last_error": _camera_state.get("last_error", ""),
+        }
 
     @router.get("/camera/detections")
     async def camera_detections() -> JSONResponse:
