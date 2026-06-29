@@ -541,10 +541,6 @@ async function pollCameraDetections() {
 }
 
 async function startCamera() {
-  const status = await api("/camera/status");
-  if (!status.camera_available) {
-    throw new Error("Camera worker is not running. Start the app without --no-camera.");
-  }
   const image = $("#camera-stream");
   if (!image) throw new Error("Camera stream element is missing.");
   image.onerror = () => {
@@ -552,7 +548,7 @@ async function startCamera() {
   };
   image.src = `/robotis/camera/stream?_=${Date.now()}`;
   setCameraRunning(true);
-  await pollCameraDetections();
+  pollCameraDetections();
   if (state.camera.timer) clearInterval(state.camera.timer);
   state.camera.timer = setInterval(() => {
     pollCameraDetections();

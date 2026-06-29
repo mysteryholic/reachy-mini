@@ -1060,20 +1060,27 @@ def create_robotis_router(
         ok, buffer = cv2.imencode(".jpg", annotated, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
         return buffer.tobytes() if ok else None
 
+    def _detector_status() -> dict[str, Any]:
+        """Return detector state without triggering lazy model loading."""
+        from reachy_robotis.vision.object_detector import get_object_detector
+
+        detector = get_object_detector()
+        available = getattr(detector, "_available", None)
+        error = getattr(detector, "_error", None)
+        return {
+            "detection_available": bool(available),
+            "detection_error": error,
+        }
+
     @router.get("/camera/status")
     async def camera_status() -> dict[str, Any]:
         """Report whether the camera feed and object detector are available."""
-        from reachy_robotis.vision.object_detector import get_object_detector
-
         has_frame = bool(camera_worker is not None and camera_worker.get_latest_frame() is not None)
-        detector = get_object_detector()
-        detection_available = detector.available
         return {
             "ok": True,
             "camera_available": camera_worker is not None,
             "frame_available": has_frame,
-            "detection_available": detection_available,
-            "detection_error": None if detection_available else detector.error,
+            **_detector_status(),
         }
 
     @router.get("/camera/snapshot")
@@ -1159,18 +1166,15 @@ def create_robotis_router(
     @router.get("/camera/detections")
     async def camera_detections() -> JSONResponse:
         """Return the detections from the most recent snapshot inference."""
-        from reachy_robotis.vision.object_detector import get_object_detector
-
-        detector = get_object_detector()
         detections = _camera_state["detections"]
         counts: dict[str, int] = {}
         for det in detections:
             counts[det["label"]] = counts.get(det["label"], 0) + 1
+        detector_status = _detector_status()
         return JSONResponse(
             {
                 "ok": True,
-                "detection_available": detector.available,
-                "detection_error": None if detector.available else detector.error,
+                **detector_status,
                 "count": len(detections),
                 "counts": counts,
                 "detections": detections,
