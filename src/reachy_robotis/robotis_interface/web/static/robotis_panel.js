@@ -3,6 +3,14 @@ const $ = (selector) => document.querySelector(selector);
 const state = {
   summary: { products: [], recipes: [], actions: [], sessions: [] },
   lastResult: null,
+  selectedProductId: "",
+  selectedWorkflows: {},
+  camera: {
+    running: false,
+    timer: null,
+    polling: false,
+    log: [],
+  },
 };
 
 function escapeHtml(value) {
@@ -61,7 +69,9 @@ function cardFor(productId) {
 }
 
 function selectedWorkflow(productId) {
-  return cardFor(productId)?.querySelector('[name="workflow"]')?.value || "";
+  const workflowId = cardFor(productId)?.querySelector('[name="workflow"]')?.value || "";
+  if (workflowId) state.selectedWorkflows[productId] = workflowId;
+  return workflowId;
 }
 
 function authenticationFields(product) {
@@ -85,7 +95,7 @@ function authenticationFields(product) {
 }
 
 function advancedWorkflow(product) {
-  const workflow = product.workflows[0];
+  const workflow = (product.workflows || [])[0];
   const recipe = workflow ? recipeById(workflow.workflow_id) : null;
   return `
     <details class="advanced-block">
@@ -157,24 +167,57 @@ function renderTerminalEditor(terminal, index) {
 function renderProductCards() {
   const container = $("#product-cards");
   if (!container) return;
-  container.innerHTML = (state.summary.products || []).map((product) => `
-    <article class="product-card" data-product-card="${escapeHtml(product.product_id)}">
+  const products = state.summary.products || [];
+  const selector = $("#product-select");
+  if (!products.length) {
+    if (selector) selector.innerHTML = "";
+    setText("#product-context", "No products are configured.");
+    container.innerHTML = `<div class="empty-result">No product presets found.</div>`;
+    return;
+  }
+
+  const existingSelection = state.selectedProductId || selector?.value || products[0].product_id;
+  const selectedProduct = products.find((product) => product.product_id === existingSelection) || products[0];
+  state.selectedProductId = selectedProduct.product_id;
+
+  if (selector) {
+    selector.innerHTML = products.map((product) => `
+      <option value="${escapeHtml(product.product_id)}" ${product.product_id === selectedProduct.product_id ? "selected" : ""}>
+        ${escapeHtml(product.display_name)}
+      </option>`).join("");
+  }
+
+  const workflowId = state.selectedWorkflows[selectedProduct.product_id] || selectedProduct.workflows?.[0]?.workflow_id || "";
+  const workflowOptions = (selectedProduct.workflows || []).map((workflow) => `
+    <option value="${escapeHtml(workflow.workflow_id)}" ${workflow.workflow_id === workflowId ? "selected" : ""}>
+      ${escapeHtml(workflow.display_name)}
+    </option>`).join("");
+
+  setText(
+    "#product-context",
+    `${selectedProduct.display_name} · connection ${selectedProduct.connection_id || "not configured"}`,
+  );
+
+  container.innerHTML = `
+    <article class="product-card selected-product-card" data-product-card="${escapeHtml(selectedProduct.product_id)}">
       <header>
-        <h3>${escapeHtml(product.display_name)}</h3>
+        <div>
+          <h3>${escapeHtml(selectedProduct.display_name)}</h3>
+          <p class="muted">Save connection details, test access, then launch a workflow.</p>
+        </div>
         <span class="chip">Preset</span>
       </header>
       <div class="product-fields">
-        <label>Host/IP<input name="host" value="${escapeHtml(product.host || "")}" placeholder="192.168.50.11" /></label>
-        <label>User<input name="user" value="${escapeHtml(product.user || "")}" /></label>
-        ${authenticationFields(product)}
+        <label>Host/IP<input name="host" value="${escapeHtml(selectedProduct.host || "")}" placeholder="192.168.50.11" /></label>
+        <label>User<input name="user" value="${escapeHtml(selectedProduct.user || "")}" /></label>
+        ${authenticationFields(selectedProduct)}
         <label class="full-width">Workflow
           <select name="workflow">
-            ${(product.workflows || []).map((workflow) => `
-              <option value="${escapeHtml(workflow.workflow_id)}">${escapeHtml(workflow.display_name)}</option>`).join("")}
+            ${workflowOptions}
           </select>
         </label>
       </div>
-      <p class="workflow-description">${escapeHtml(product.workflows?.[0]?.description || "")}</p>
+      <p class="workflow-description"></p>
       <div class="row product-actions">
         <button type="button" class="secondary" data-product-action="save">Save Connection</button>
         <button type="button" class="secondary" data-product-action="test">Test Connection</button>
@@ -182,8 +225,11 @@ function renderProductCards() {
         <button type="button" class="danger" data-product-action="stop">Stop</button>
       </div>
       <div class="card-result"><strong>Last Result</strong><span class="muted" data-card-result>Not run yet.</span></div>
-      ${advancedWorkflow(product)}
-    </article>`).join("");
+      ${advancedWorkflow(selectedProduct)}
+    </article>`;
+
+  const card = cardFor(selectedProduct.product_id);
+  if (card) updateSelectedWorkflow(card);
 }
 
 function productConnectionPayload(productId) {
@@ -386,6 +432,7 @@ function startNewWorkflow(productId) {
 function updateSelectedWorkflow(card) {
   const productId = card.dataset.productCard;
   const workflowId = selectedWorkflow(productId);
+  state.selectedWorkflows[productId] = workflowId;
   const product = productById(productId);
   const workflow = product.workflows.find((item) => item.workflow_id === workflowId);
   setText(card.querySelector(".workflow-description"), workflow?.description || "");
@@ -421,6 +468,109 @@ function renderLastResult() {
   setText("#full-logs", sessions.map((session) => `${session.display_name || session.terminal_id}\nstdout:\n${session.stdout_tail || ""}\nstderr:\n${session.stderr_tail || session.last_error || ""}`).join("\n\n") || "No logs.");
 }
 
+function formatDetection(det) {
+  const confidence = Number(det.confidence || 0);
+  const bbox = Array.isArray(det.bbox) ? det.bbox : [];
+  const [x1 = 0, y1 = 0, x2 = 0, y2 = 0] = bbox;
+  const cx = Math.round((Number(x1) + Number(x2)) / 2);
+  const cy = Math.round((Number(y1) + Number(y2)) / 2);
+  const width = Math.max(0, Math.round(Number(x2) - Number(x1)));
+  const height = Math.max(0, Math.round(Number(y2) - Number(y1)));
+  return {
+    label: String(det.label || "object"),
+    confidence,
+    bbox: [Math.round(x1), Math.round(y1), Math.round(x2), Math.round(y2)],
+    center: [cx, cy],
+    size: [width, height],
+  };
+}
+
+function renderDetections(data) {
+  const detections = (data.detections || []).map(formatDetection);
+  setText("#detection-count", detections.length);
+  const summary = $("#detection-summary");
+  if (summary) {
+    summary.innerHTML = detections.length
+      ? detections.map((det) => `
+        <div class="detection-row">
+          <span class="detection-label">${escapeHtml(det.label)}</span>
+          <span class="detection-conf">${Math.round(det.confidence * 100)}%</span>
+          <span class="detection-pos">center ${det.center[0]}, ${det.center[1]}</span>
+        </div>`).join("")
+      : `<span class="muted">No objects detected in the latest frame.</span>`;
+  }
+
+  const stamp = new Date().toLocaleTimeString();
+  const lines = detections.length
+    ? detections.map((det) =>
+        `${stamp} ${det.label} ${Math.round(det.confidence * 100)}% bbox=[${det.bbox.join(", ")}] center=(${det.center.join(", ")}) size=${det.size[0]}x${det.size[1]}`,
+      )
+    : [`${stamp} no objects detected`];
+  state.camera.log.unshift(...lines);
+  state.camera.log = state.camera.log.slice(0, 80);
+  setText("#detection-log", state.camera.log.join("\n"));
+}
+
+function setCameraRunning(running) {
+  state.camera.running = running;
+  const image = $("#camera-stream");
+  const placeholder = $("#camera-placeholder");
+  if (image) image.hidden = !running;
+  if (placeholder) placeholder.hidden = running;
+  setText("#camera-status", running ? "Camera streaming is running." : "Camera streaming stopped.");
+}
+
+function loadCameraSnapshot() {
+  const image = $("#camera-stream");
+  if (!image) return Promise.reject(new Error("Camera image element is missing."));
+  return new Promise((resolve, reject) => {
+    image.onload = () => resolve();
+    image.onerror = () => reject(new Error("Camera frame is unavailable."));
+    image.src = `/robotis/camera/snapshot?_=${Date.now()}`;
+  });
+}
+
+async function pollCameraFrame() {
+  if (!state.camera.running || state.camera.polling) return;
+  state.camera.polling = true;
+  try {
+    await loadCameraSnapshot();
+    if (!state.camera.running) return;
+    const detections = await api("/camera/detections");
+    renderDetections(detections);
+    if (detections.detection_error) {
+      setText("#camera-status", detections.detection_error);
+    } else {
+      setText("#camera-status", "Camera streaming is running.");
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    setText("#camera-status", message);
+  } finally {
+    state.camera.polling = false;
+  }
+}
+
+async function startCamera() {
+  const status = await api("/camera/status");
+  if (!status.camera_available) {
+    throw new Error("Camera worker is not running. Start the app without --no-camera.");
+  }
+  setCameraRunning(true);
+  await pollCameraFrame();
+  if (state.camera.timer) clearInterval(state.camera.timer);
+  state.camera.timer = setInterval(() => {
+    pollCameraFrame();
+  }, 1000);
+}
+
+function stopCamera() {
+  if (state.camera.timer) clearInterval(state.camera.timer);
+  state.camera.timer = null;
+  state.camera.polling = false;
+  setCameraRunning(false);
+}
+
 async function refresh(renderCards = true) {
   state.summary = await api("/ui/summary");
   if (renderCards) renderProductCards();
@@ -432,6 +582,8 @@ document.addEventListener("click", async (event) => {
   if (!(target instanceof HTMLElement)) return;
   try {
     if (target.id === "refresh") await refresh();
+    if (target.id === "camera-start") await startCamera();
+    if (target.id === "camera-stop") stopCamera();
     if (target.id === "global-stop") {
       state.lastResult = await api("/stop", { method: "POST", body: JSON.stringify({}) });
       renderLastResult();
@@ -457,7 +609,11 @@ document.addEventListener("click", async (event) => {
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     const card = target.closest("[data-product-card]");
-    setText(card?.querySelector("[data-card-result]") || "#result", message);
+    if (target.id === "camera-start" || target.id === "camera-stop") {
+      setText("#camera-status", message);
+    } else {
+      setText(card?.querySelector("[data-card-result]") || "#result", message);
+    }
   }
 });
 
@@ -465,6 +621,11 @@ document.addEventListener("change", (event) => {
   const target = event.target;
   if (!(target instanceof HTMLElement)) return;
   const card = target.closest("[data-product-card]");
+  if (target.id === "product-select") {
+    state.selectedProductId = target.value;
+    renderProductCards();
+    return;
+  }
   if (!card) return;
   if (target.matches('[name="workflow"]')) updateSelectedWorkflow(card);
   if (target.matches('[name="auth_method"]')) {

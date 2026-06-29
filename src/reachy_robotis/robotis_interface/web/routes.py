@@ -335,12 +335,42 @@ def create_robotis_router(
 
       <section class="console-section primary-section">
         <h2>1. Product Launcher</h2>
-        <p class="muted">Product presets supply Docker, ROS, launch, and stop settings automatically.</p>
-        <div id="product-cards" class="product-grid"></div>
+        <div class="launcher-layout">
+          <label class="product-picker">Product
+            <select id="product-select"></select>
+          </label>
+          <p id="product-context" class="muted">Choose a product to edit its connection and workflows.</p>
+        </div>
+        <div id="product-cards" class="product-detail"></div>
       </section>
 
       <section class="console-section">
-        <h2>2. Last Result</h2>
+        <div class="section-heading">
+          <div>
+            <h2>2. Camera Live Detection</h2>
+            <p class="muted">Stream Reachy Mini camera frames and show object detection results.</p>
+          </div>
+          <div class="row camera-actions">
+            <button id="camera-start" type="button">Start Camera</button>
+            <button id="camera-stop" type="button" class="secondary">Stop Camera</button>
+          </div>
+        </div>
+        <div class="camera-layout">
+          <div class="camera-view" aria-live="polite">
+            <img id="camera-stream" alt="Reachy Mini camera stream with object detections" hidden />
+            <div id="camera-placeholder" class="camera-placeholder">Camera stream stopped.</div>
+          </div>
+          <aside class="camera-detections">
+            <h3>Detected Objects <span id="detection-count" class="badge">0</span></h3>
+            <div id="detection-summary" class="detection-summary muted">No detections yet.</div>
+            <pre id="detection-log" class="camera-log">Start the camera to see detection logs.</pre>
+          </aside>
+        </div>
+        <div id="camera-status" class="result-message muted" aria-live="polite"></div>
+      </section>
+
+      <section class="console-section">
+        <h2>3. Last Result</h2>
         <div id="no-result" class="empty-result">No result yet.</div>
         <div id="last-result" hidden>
           <dl class="summary-list">
