@@ -7,6 +7,7 @@ stop_dance
 #play_emotion
 stop_emotion
 #camera
+detect_objects
 #do_nothing
 #head_tracking
 #move_head
