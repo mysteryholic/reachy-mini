@@ -5,6 +5,7 @@ import shlex
 import time
 import asyncio
 import logging
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -36,7 +37,14 @@ def create_robotis_router(
     device_registry = DeviceRegistry()
     product_presets = ProductPresetCatalog()
 
-    _camera_state: dict[str, Any] = {"detections": [], "ts": 0.0, "detecting": False, "last_error": ""}
+    _camera_state: dict[str, Any] = {
+        "detections": [],
+        "ts": 0.0,
+        "detecting": False,
+        "last_error": "",
+        "detector_warming": False,
+        "detector_warm_started": False,
+    }
 
     def _app_mode() -> str:
         if os.getenv("SPACE_ID") or os.getenv("SYSTEM") == "spaces":
@@ -1121,6 +1129,33 @@ def create_robotis_router(
             "detection_error": error,
         }
 
+    def _warm_detector_in_background() -> bool:
+        """Load the detector model in a daemon thread so first detection is fast."""
+        if _camera_state["detector_warming"]:
+            return False
+        detector_status = _detector_status()
+        if detector_status["detection_available"] or detector_status["detection_error"]:
+            return False
+
+        _camera_state["detector_warming"] = True
+        _camera_state["detector_warm_started"] = True
+
+        def _warm() -> None:
+            try:
+                from reachy_robotis.vision.object_detector import get_object_detector
+
+                get_object_detector().available
+            except Exception as exc:  # noqa: BLE001 - warmup must never break app startup
+                _camera_state["last_error"] = str(exc)
+            finally:
+                _camera_state["detector_warming"] = False
+
+        threading.Thread(target=_warm, name="robotis-object-detector-warmup", daemon=True).start()
+        return True
+
+    if os.getenv("REACHY_ROBOTIS_DISABLE_DETECTOR_WARMUP", "0").strip().lower() not in {"1", "true", "yes"}:
+        _warm_detector_in_background()
+
     @router.get("/camera/status")
     async def camera_status() -> dict[str, Any]:
         """Report whether the camera feed and object detector are available."""
@@ -1130,6 +1165,7 @@ def create_robotis_router(
             "camera_available": camera_worker is not None,
             "frame_available": has_frame,
             **_detector_status(),
+            "detector_warming": bool(_camera_state.get("detector_warming")),
         }
 
     @router.get("/camera/snapshot")
@@ -1203,12 +1239,25 @@ def create_robotis_router(
     @router.post("/camera/detections/refresh")
     async def camera_detections_refresh() -> dict[str, Any]:
         """Start object detection on the latest frame without waiting for it."""
+        _warm_detector_in_background()
         started = _start_detection_task(force=True)
         return {
             "ok": True,
             "started": started,
             "detecting": bool(_camera_state.get("detecting")),
+            "detector_warming": bool(_camera_state.get("detector_warming")),
             "last_error": _camera_state.get("last_error", ""),
+        }
+
+    @router.post("/camera/detections/warmup")
+    async def camera_detections_warmup() -> dict[str, Any]:
+        """Warm up the detector model before the user starts the camera."""
+        started = _warm_detector_in_background()
+        return {
+            "ok": True,
+            "started": started,
+            "detector_warming": bool(_camera_state.get("detector_warming")),
+            **_detector_status(),
         }
 
     @router.get("/camera/detections")
@@ -1227,6 +1276,7 @@ def create_robotis_router(
                 "counts": counts,
                 "detections": detections,
                 "detecting": bool(_camera_state.get("detecting")),
+                "detector_warming": bool(_camera_state.get("detector_warming")),
                 "last_error": _camera_state.get("last_error", ""),
             }
         )

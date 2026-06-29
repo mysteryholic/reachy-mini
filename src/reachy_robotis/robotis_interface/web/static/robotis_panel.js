@@ -498,6 +498,8 @@ function renderDetections(data) {
           <span class="detection-conf">${Math.round(det.confidence * 100)}%</span>
           <span class="detection-pos">center ${det.center[0]}, ${det.center[1]}</span>
         </div>`).join("")
+      : data.detector_warming
+        ? `<span class="muted">Loading detection model...</span>`
       : data.detecting
         ? `<span class="muted">Detecting objects...</span>`
       : `<span class="muted">No objects detected in the latest frame.</span>`;
@@ -508,6 +510,8 @@ function renderDetections(data) {
     ? detections.map((det) =>
         `${stamp} ${det.label} ${Math.round(det.confidence * 100)}% bbox=[${det.bbox.join(", ")}] center=(${det.center.join(", ")}) size=${det.size[0]}x${det.size[1]}`,
       )
+    : data.detector_warming
+      ? [`${stamp} loading detection model...`]
     : data.detecting
       ? [`${stamp} detecting objects...`]
     : [`${stamp} no objects detected`];
@@ -664,3 +668,4 @@ window.addEventListener("unhandledrejection", (event) => {
 });
 
 refresh().catch((error) => setText("#result", error.message));
+api("/camera/detections/warmup", { method: "POST", body: JSON.stringify({}) }).catch(() => {});
