@@ -11,7 +11,7 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 from fastapi import APIRouter, FastAPI, WebSocket, WebSocketDisconnect
-from fastapi.responses import HTMLResponse, JSONResponse, Response
+from fastapi.responses import HTMLResponse, JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from reachy_robotis.config import config
@@ -1033,6 +1033,58 @@ def create_robotis_router(
             content=buffer.tobytes(),
             media_type="image/jpeg",
             headers={"Cache-Control": "no-store"},
+        )
+
+    @router.get("/camera/stream")
+    async def camera_stream() -> StreamingResponse:
+        """Return an MJPEG stream with detection boxes drawn on each frame."""
+        import cv2
+        import numpy as np
+
+        from reachy_robotis.vision.object_detector import get_object_detector
+
+        def _placeholder_frame(message: str) -> bytes:
+            frame = np.zeros((480, 854, 3), dtype=np.uint8)
+            cv2.putText(
+                frame,
+                message,
+                (32, 240),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.8,
+                (210, 222, 240),
+                2,
+                cv2.LINE_AA,
+            )
+            ok, buffer = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
+            return buffer.tobytes() if ok else b""
+
+        async def _frames():
+            while True:
+                if camera_worker is None:
+                    jpg = _placeholder_frame("Camera worker is not running")
+                    await asyncio.sleep(0.5)
+                else:
+                    frame = await asyncio.to_thread(camera_worker.get_latest_frame)
+                    if frame is None:
+                        jpg = _placeholder_frame("Waiting for camera frame...")
+                        await asyncio.sleep(0.25)
+                    else:
+                        detections = await asyncio.to_thread(_run_detection, frame)
+                        annotated = await asyncio.to_thread(get_object_detector().annotate, frame, detections)
+                        ok, buffer = await asyncio.to_thread(
+                            cv2.imencode,
+                            ".jpg",
+                            annotated,
+                            [int(cv2.IMWRITE_JPEG_QUALITY), 80],
+                        )
+                        jpg = buffer.tobytes() if ok else _placeholder_frame("Failed to encode camera frame")
+                        await asyncio.sleep(0.15)
+                yield b"--frame\r\nContent-Type: image/jpeg\r\nCache-Control: no-store\r\n\r\n" + jpg + b"\r\n"
+
+        return StreamingResponse(
+            _frames(),
+            media_type="multipart/x-mixed-replace; boundary=frame",
+            headers={"Cache-Control": "no-store, no-cache, must-revalidate", "Pragma": "no-cache"},
         )
 
     @router.get("/camera/detections")

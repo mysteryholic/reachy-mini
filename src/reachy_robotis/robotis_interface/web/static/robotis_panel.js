@@ -520,23 +520,12 @@ function setCameraRunning(running) {
   setText("#camera-status", running ? "Camera streaming is running." : "Camera streaming stopped.");
 }
 
-function loadCameraSnapshot() {
-  const image = $("#camera-stream");
-  if (!image) return Promise.reject(new Error("Camera image element is missing."));
-  return new Promise((resolve, reject) => {
-    image.onload = () => resolve();
-    image.onerror = () => reject(new Error("Camera frame is unavailable."));
-    image.src = `/robotis/camera/snapshot?_=${Date.now()}`;
-  });
-}
-
-async function pollCameraFrame() {
+async function pollCameraDetections() {
   if (!state.camera.running || state.camera.polling) return;
   state.camera.polling = true;
   try {
-    await loadCameraSnapshot();
-    if (!state.camera.running) return;
     const detections = await api("/camera/detections");
+    if (!state.camera.running) return;
     renderDetections(detections);
     if (detections.detection_error) {
       setText("#camera-status", detections.detection_error);
@@ -556,11 +545,17 @@ async function startCamera() {
   if (!status.camera_available) {
     throw new Error("Camera worker is not running. Start the app without --no-camera.");
   }
+  const image = $("#camera-stream");
+  if (!image) throw new Error("Camera stream element is missing.");
+  image.onerror = () => {
+    setText("#camera-status", "Camera stream failed to load. Retrying can help if the camera is still warming up.");
+  };
+  image.src = `/robotis/camera/stream?_=${Date.now()}`;
   setCameraRunning(true);
-  await pollCameraFrame();
+  await pollCameraDetections();
   if (state.camera.timer) clearInterval(state.camera.timer);
   state.camera.timer = setInterval(() => {
-    pollCameraFrame();
+    pollCameraDetections();
   }, 1000);
 }
 
@@ -568,6 +563,12 @@ function stopCamera() {
   if (state.camera.timer) clearInterval(state.camera.timer);
   state.camera.timer = null;
   state.camera.polling = false;
+  const image = $("#camera-stream");
+  if (image) {
+    image.removeAttribute("src");
+    image.onload = null;
+    image.onerror = null;
+  }
   setCameraRunning(false);
 }
 
